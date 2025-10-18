@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Gestão - Agenda IFC Concórdia</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .table-responsive { max-height: 70vh; }
+    </style>
+</head>
+<body>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="display-6">Painel de Gestão de Visitas</h1>
+            <span class="text-muted">IFC Concórdia</span>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div id="loading-message">
+                    <p>Carregando agendamentos...</p>
+                </div>
+                <div id="table-container" class="table-responsive" style="display: none;">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data Visita</th>
+                                <th>Escola</th>
+                                <th>Responsável</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agendamentos-tbody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ################### PASSO IMPORTANTE ###################
+        // COLE A SUA URL DO APP SCRIPT DENTRO DAS ASPAS ABAIXO
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxS6eWRQesqaEUzfjHeb61o6tlqKuuORUxR33nmxyz6RLFhF4J-Jv5peVp_SZ_Xmg115A/exec";
+        // ########################################################
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const tbody = document.getElementById('agendamentos-tbody');
+            const loadingMessage = document.getElementById('loading-message');
+            const tableContainer = document.getElementById('table-container');
+
+            // Busca os dados na nossa planilha assim que a página carrega
+            fetch(SCRIPT_URL)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'sucesso' && data.dados.length > 0) {
+                        // Limpa a tabela antes de adicionar os novos dados
+                        tbody.innerHTML = '';
+
+                        // Para cada agendamento recebido, cria uma nova linha na tabela
+                        data.dados.forEach(agendamento => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${agendamento.Data_Visita}</td>
+                                <td>${agendamento.Nome_Escola}</td>
+                                <td>${agendamento.Nome_Responsavel}</td>
+                                <td><span class="badge bg-warning">${agendamento.Status}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-info">Detalhes</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+
+                        // Esconde a mensagem de "Carregando" e mostra a tabela
+                        loadingMessage.style.display = 'none';
+                        tableContainer.style.display = 'block';
+
+                    } else {
+                        loadingMessage.innerHTML = '<p>Nenhum agendamento encontrado.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar dados:', error);
+                    loadingMessage.innerHTML = '<p class="text-danger">Erro ao carregar os dados. Verifique o console.</p>';
+                });
+        });
+    </script>
+
+</body>
+</html>

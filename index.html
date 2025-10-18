@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda de Visitas - IFC Concórdia</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet">
+
+    <style>
+        body { background-color: #f8f9fa; }
+        .container { max-width: 900px; margin-top: 2rem; }
+        #calendario { font-size: 0.9em; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="container bg-white p-4 p-md-5 rounded shadow-sm">
+
+        <div class="text-center mb-4">
+            <h2 class="display-6">Agenda de Visitas</h2>
+            <p class="lead">Instituto Federal Catarinense - Campus Concórdia</p>
+        </div>
+
+        <div id="area-calendario">
+            <h4 class="mb-3">Selecione uma data para a visita:</h4>
+            <div id="calendario"></div> 
+        </div>
+
+        <div id="area-formulario" style="display: none;">
+            <h4>Formulário de Agendamento</h4>
+            <p>Data da visita: <strong id="data-selecionada-texto"></strong></p>
+            <hr>
+
+            <form id="form-agendamento">
+                <input type="hidden" id="data-selecionada-input" name="dataVisita">
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="nomeEscola" class="form-label">Nome da Escola/Instituição</label>
+                        <input type="text" class="form-control" id="nomeEscola" name="nomeEscola" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="cidadeEscola" class="form-label">Cidade da Escola</label>
+                        <input type="text" class="form-control" id="cidadeEscola" name="cidadeEscola" required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label for="nomeResponsavel" class="form-label">Nome do Responsável</label>
+                        <input type="text" class="form-control" id="nomeResponsavel" name="nomeResponsavel" required>
+                    </div>
+                     <div class="col-md-3 mb-3">
+                        <label for="telefoneResponsavel" class="form-label">Telefone de Contato</label>
+                        <input type="tel" class="form-control" id="telefoneResponsavel" name="telefoneResponsavel" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="emailResponsavel" class="form-label">Email de Contato</label>
+                        <input type="email" class="form-control" id="emailResponsavel" name="emailResponsavel" required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="qtdAlunos" class="form-label">Quantidade de Alunos</label>
+                        <input type="number" class="form-control" id="qtdAlunos" name="qtdAlunos" min="1" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="faixaEtaria" class="form-label">Faixa Etária (Ex: 12-14 anos)</label>
+                        <input type="text" class="form-control" id="faixaEtaria" name="faixaEtaria" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="anoLetivo" class="form-label">Ano Letivo (Ex: 8º ano)</label>
+                        <input type="text" class="form-control" id="anoLetivo" name="anoLetivo" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Período da Visita</label><br>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="periodo" id="periodoMatutino" value="Matutino" checked>
+                        <label class="form-check-label" for="periodoMatutino">Matutino</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="periodo" id="periodoVespertino" value="Vespertino">
+                        <label class="form-check-label" for="periodoVespertino">Vespertino</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="objetivoVisita" class="form-label">Principal Objetivo da Visita</label>
+                    <select class="form-select" id="objetivoVisita" name="objetivoVisita" required>
+                        <option value="" selected disabled>Selecione uma opção...</option>
+                        <option>Conhecer as instalações do curso de Técnico em Alimentos</option>
+                        <option>Conhecer as instalações do curso de Técnico em Agropecuária</option>
+                        <option>Conhecer as instalações do curso de Técnico em Informática</option>
+                        <option>Conhecer os Laboratórios (Física, Matemática, Alimentos, Química)</option>
+                        <option>Conhecer as instalações Gerais</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Pretendem almoçar no IFC?</label>
+                    <div class="form-text mt-0 mb-2">Custo de R$ 3,00 para alunos do ensino fundamental e médio, R$ 15,00 para demais. A compra do ticket é feita no dia da visita, no Campus.</div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoSim" value="Sim">
+                        <label class="form-check-label" for="almocoSim">Sim</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoNao" value="Não" checked>
+                        <label class="form-check-label" for="almocoNao">Não</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label">Observações (opcional)</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                </div>
+
+                <hr>
+
+                <div class="d-flex justify-content-between">
+                     <button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button>
+                     <button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <script>
+        // ################### PASSO IMPORTANTE ###################
+        // COLE A SUA URL DO APP SCRIPT DENTRO DAS ASPAS ABAIXO
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyypPH32RDjcypb-ccm349RuUSPO4CAfIqDNBw7BEscS1vpvj4RdTzFJ9IuirDbBSledQ/exec";
+        // ########################################################
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const areaCalendario = document.getElementById('area-calendario');
+            const areaFormulario = document.getElementById('area-formulario');
+            const dataSelecionadaTexto = document.getElementById('data-selecionada-texto');
+            const dataSelecionadaInput = document.getElementById('data-selecionada-input');
+            const btnVoltar = document.getElementById('btn-voltar');
+            const calendarEl = document.getElementById('calendario');
+            const formAgendamento = document.getElementById('form-agendamento');
+            const btnEnviar = document.getElementById('btn-enviar');
+
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'pt-br',
+                headerToolbar: { left: 'prev', center: 'title', right: 'next' },
+                dateClick: function(info) {
+                    const dataClicada = new Date(info.dateStr + 'T12:00:00');
+                    dataSelecionadaTexto.textContent = dataClicada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    dataSelecionadaInput.value = info.dateStr;
+                    areaCalendario.style.display = 'none';
+                    areaFormulario.style.display = 'block';
+                }
+            });
+            calendar.render();
+
+            btnVoltar.addEventListener('click', function() {
+                areaFormulario.style.display = 'none';
+                areaCalendario.style.display = 'block';
+            });
+
+            // NOVA LÓGICA PARA ENVIO DO FORMULÁRIO
+            formAgendamento.addEventListener('submit', function(event) {
+                event.preventDefault(); // Impede o recarregamento da página
+
+                // Desabilita o botão para evitar cliques duplos
+                btnEnviar.disabled = true;
+                btnEnviar.textContent = 'Enviando...';
+
+                const formData = new FormData(formAgendamento);
+                const dados = Object.fromEntries(formData.entries());
+
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(dados)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'sucesso') {
+                        alert('Agendamento realizado com sucesso! Por favor, verifique seu e-mail para a confirmação.');
+                        formAgendamento.reset(); // Limpa o formulário
+                        areaFormulario.style.display = 'none';
+                        areaCalendario.style.display = 'block';
+                    } else {
+                        throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao enviar agendamento:', error);
+                    alert('Houve um erro ao enviar seu agendamento. Por favor, tente novamente.');
+                })
+                .finally(() => {
+                    // Reabilita o botão
+                    btnEnviar.disabled = false;
+                    btnEnviar.textContent = 'Enviar Agendamento';
+                });
+            });
+        });
+    </script>
+
+</body>
+</html>
