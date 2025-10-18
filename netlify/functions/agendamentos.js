@@ -11,66 +11,73 @@ const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
 const credenciaisBase64 = process.env.GOOGLE_CREDENTIALS;
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 exports.handler = async (event, context) => {
     try {
-        if (!credenciaisBase64 || !ID_PLANILHA || !EMAIL_USER || !EMAIL_PASS) {
-            throw new Error("Credenciais não configuradas corretamente.");
-        }
-
+        if (!credenciaisBase64 || !ID_PLANILHA) { throw new Error("Credenciais não configuradas."); }
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
-
         const auth = new JWT({
             email: credenciais.client_email,
             key: credenciais.private_key,
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
 
-        const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-        await doc.loadInfo();
-        const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-
         if (event.httpMethod === 'GET') {
-            const linhas = await abaAgendamentos.getRows();
-            const agendamentos = linhas.map(linha => linha.toObject());
-            return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
+            return { statusCode: 200, body: "API de agendamentos está online." };
         }
 
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
 
-            if (dados.action) { // Ação do painel de admin
+            if (dados.action === 'login') {
+                if (dados.password === ADMIN_PASSWORD) {
+                    const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
+                    await doc.loadInfo();
+                    const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+                    const linhas = await abaAgendamentos.getRows();
+                    const agendamentos = linhas.map(linha => linha.toObject());
+                    return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
+                } else {
+                    return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) };
+                }
+            }
+
+            if (dados.action === 'aprovar' || dados.action === 'recusar') {
+                if (dados.password !== ADMIN_PASSWORD) return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
+                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
+                await doc.loadInfo();
+                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+                const linhas = await abaAgendamentos.getRows();
                 const { action, id } = dados;
-                const linhas = await abaAgendamentos.getRows(); // Busca as linhas aqui para garantir que estão atualizadas
                 const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === id);
 
                 if (linhaParaAtualizar) {
                     const agendamento = linhaParaAtualizar.toObject();
+                    linhaParaAtualizar.set('Status', action === 'aprovar' ? 'Aprovado' : 'Recusado');
+                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
+                    await linhaParaAtualizar.save();
                     if (action === 'aprovar') {
-                        linhaParaAtualizar.set('Status', 'Aprovado');
-                        linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
-                        await linhaParaAtualizar.save();
                         await enviarEmailDeAprovacao(agendamento);
                         await criarEventoNaAgenda(agendamento, auth, EMAIL_USER);
                         await enviarEmailDeConfirmacaoParaAdmin(agendamento, "APROVADO");
-                    } else if (action === 'recusar') {
-                        linhaParaAtualizar.set('Status', 'Recusado');
-                        linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
-                        await linhaParaAtualizar.save();
+                    } else {
                         await enviarEmailDeRecusa(agendamento);
                         await enviarEmailDeConfirmacaoParaAdmin(agendamento, "RECUSADO");
                     }
                     return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
                 }
-            } else { // Novo agendamento do formulário público
-                const novaLinha = { 
-                    ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente", 
-                    Data_Visita: dados.dataVisita, Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola, 
-                    Nome_Responsavel: dados.nomeResponsavel, Telefone_Responsavel: dados.telefoneResponsavel, Email_Responsavel: dados.emailResponsavel,
-                    Qtd_Alunos: dados.qtdAlunos, Faixa_Etaria: dados.faixaEtaria, Ano_Letivo: dados.anoLetivo,
-                    Objetivo_Visita: dados.objetivoVisita, Pretende_Almocar: dados.pretendeAlmocar, Observacoes: dados.observacoes
-                };
+            } else {
+                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
+                await doc.loadInfo();
+                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+                const linhas = await abaAgendamentos.getRows();
+                const agendamentoPendenteExistente = linhas.find(row => row.get('Nome_Escola').toLowerCase() === dados.nomeEscola.toLowerCase() && row.get('Status') === 'Pendente');
+                if (agendamentoPendenteExistente) {
+                    return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) };
+                }
+                const novaLinha = { ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente", ...dados };
                 await abaAgendamentos.addRow(novaLinha);
                 await enviarEmailParaAdmin(dados);
                 await enviarEmailParaVisitante(dados);
