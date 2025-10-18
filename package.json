@@ -1,0 +1,7 @@
+{
+  "name": "agenda-ifc-backend",
+  "version": "1.0.0",
+  "dependencies": {
+    "google-spreadsheet": "^4.1.1"
+  }
+}
