@@ -5,7 +5,7 @@ const nodemailer = require('nodemailer');
 
 // ################### PASSO IMPORTANTE ###################
 // CONFIRME SE O ID DA SUA PLANILHA V2 ESTÁ CORRETO
-const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQk";
+const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
 // ########################################################
 
 const credenciaisBase64 = process.env.GOOGLE_CREDENTIALS;
