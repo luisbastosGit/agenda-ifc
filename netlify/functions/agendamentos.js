@@ -1,6 +1,6 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
-const { google } = require('googleapis'); // Nova biblioteca importada
+const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
 
 // ################### PASSO IMPORTANTE ###################
@@ -24,10 +24,7 @@ exports.handler = async (event, context) => {
         const auth = new JWT({
             email: credenciais.client_email,
             key: credenciais.private_key,
-            scopes: [
-                'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/calendar' // Nova permissão adicionada
-            ],
+            scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
 
         const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
@@ -53,8 +50,7 @@ exports.handler = async (event, context) => {
                         linhaParaAtualizar.set('Status', 'Aprovado');
                         await linhaParaAtualizar.save();
                         await enviarEmailDeAprovacao(agendamento);
-                        // AQUI ESTÁ A MÁGICA: Passamos o e-mail da conta de extensão como o ID do calendário
-                        await criarEventoNaAgenda(agendamento, auth, EMAIL_USER); 
+                        await criarEventoNaAgenda(agendamento, auth, EMAIL_USER);
                     } else if (action === 'recusar') {
                         linhaParaAtualizar.set('Status', 'Recusado');
                         await linhaParaAtualizar.save();
@@ -63,7 +59,7 @@ exports.handler = async (event, context) => {
                     return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
                 }
             } else {
-                const novaLinha = { ID_Agendamento: "visita-" + new Date().getTime(), Data_Solicitacao: new Date().toISOString(), Status: "Pendente", ...dados };
+                const novaLinha = { ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente", ...dados };
                 await abaAgendamentos.addRow(novaLinha);
                 await enviarEmailParaAdmin(dados);
                 await enviarEmailParaVisitante(dados);
@@ -76,55 +72,52 @@ exports.handler = async (event, context) => {
     }
 };
 
-// --- NOVA FUNÇÃO DO GOOGLE AGENDA ---
 async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const calendar = google.calendar({ version: 'v3', auth });
-
-    const dataVisita = new Date(agendamento.Data_Visita + 'T00:00:00-03:00'); // Horário de Brasília
-    let horaInicio, horaFim;
-
-    if (agendamento.Periodo === 'Matutino') {
-        horaInicio = '09:00:00';
-        horaFim = '11:30:00';
-    } else { // Vespertino
-        horaInicio = '14:00:00';
-        horaFim = '16:30:00';
-    }
-
+    const dataVisita = new Date(`${agendamento.Data_Visita}T00:00:00-03:00`);
+    const horaInicio = agendamento.Periodo === 'Matutino' ? '09:00:00' : '14:00:00';
+    const horaFim = agendamento.Periodo === 'Matutino' ? '11:30:00' : '16:30:00';
     const dataInicioISO = `${dataVisita.toISOString().split('T')[0]}T${horaInicio}-03:00`;
     const dataFimISO = `${dataVisita.toISOString().split('T')[0]}T${horaFim}-03:00`;
 
     await calendar.events.insert({
-        calendarId: calendarId, // ID do calendário (e-mail da conta da extensão)
-        sendNotifications: true, // Garante que o convidado receba o e-mail
+        calendarId: calendarId, sendNotifications: true,
         requestBody: {
             summary: `Visita: ${agendamento.Nome_Escola}`,
             description: `Responsável: ${agendamento.Nome_Responsavel}\nAlunos: ${agendamento.Qtd_Alunos}\nObjetivo: ${agendamento.Objetivo_Visita}`,
-            start: {
-                dateTime: dataInicioISO,
-                timeZone: 'America/Sao_Paulo',
-            },
-            end: {
-                dateTime: dataFimISO,
-                timeZone: 'America/Sao_Paulo',
-            },
-            attendees: [ // Adiciona o responsável como convidado
-                { email: agendamento.Email_Responsavel }
-            ],
+            start: { dateTime: dataInicioISO, timeZone: 'America/Sao_Paulo' },
+            end: { dateTime: dataFimISO, timeZone: 'America/Sao_Paulo' },
+            attendees: [{ email: agendamento.Email_Responsavel }],
         },
     });
 }
 
-// --- Funções de E-mail (completas) ---
 const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: EMAIL_USER, pass: EMAIL_PASS } });
 
 async function enviarEmailParaAdmin(dados) {
     await transporter.sendMail({
-        from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `Nova Solicitação de Visita: ${dados.nomeEscola}`,
-        html: `<p>Nova solicitação de agendamento recebida de ${dados.nomeEscola} para ${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}.</p><p>Aguardando aprovação no painel.</p>`,
+        from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `Nova Solicitação: ${dados.nomeEscola}`,
+        html: `<p>Nova solicitação recebida de ${dados.nomeEscola} para ${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}.</p>`,
     });
 }
 
 async function enviarEmailParaVisitante(dados) {
     await transporter.sendMail({
-        from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_
+        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: dados.emailResponsavel, subject: `Recebemos sua solicitação de visita!`,
+        html: `<p>Olá, ${dados.nomeResponsavel},</p><p>Recebemos sua solicitação para o dia <strong>${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong> e estamos analisando.</p>`,
+    });
+}
+
+async function enviarEmailDeAprovacao(agendamento) {
+    await transporter.sendMail({
+        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: `✅ Agendamento Confirmado!`,
+        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Sua visita para o dia <strong>${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong> foi <strong>APROVADA</strong>.</p><p>Um convite foi enviado para sua agenda.</p>`,
+    });
+}
+
+async function enviarEmailDeRecusa(agendamento) {
+    await transporter.sendMail({
+        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: `Sobre sua solicitação de visita`,
+        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Infelizmente, não poderemos confirmar seu agendamento para a data solicitada. Por favor, tente uma nova data em nosso site.</p>`,
+    });
+}
