@@ -6,22 +6,24 @@ const { JWT } = require('google-auth-library');
 const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
 // ########################################################
 
-// Pega as credenciais da variável de ambiente segura do Netlify
-const credenciaisString = process.env.GOOGLE_CREDENTIALS;
+// Pega o "envelope" Base64 da variável de ambiente
+const credenciaisBase64 = process.env.GOOGLE_CREDENTIALS;
 
 exports.handler = async (event, context) => {
     try {
-        // Verifica se as credenciais foram carregadas
-        if (!credenciaisString) {
-            throw new Error("Credenciais do Google não foram encontradas nas variáveis de ambiente.");
+        // Verifica se o envelope foi encontrado
+        if (!credenciaisBase64) {
+            throw new Error("Credenciais do Google (Base64) não foram encontradas.");
         }
+
+        // Abre o envelope: decodifica o Base64 de volta para o formato JSON original
+        const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
 
-        // Configura a autenticação
+        // O resto do código continua como antes
         const auth = new JWT({
             email: credenciais.client_email,
-            // A linha abaixo é CRUCIAL para formatar a chave corretamente
-            key: credenciais.private_key.replace(/\\n/g, '\n'),
+            key: credenciais.private_key, // Não precisa mais do .replace()
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
 
@@ -29,24 +31,21 @@ exports.handler = async (event, context) => {
         await doc.loadInfo();
         const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
 
-        // Se o pedido for do tipo GET (para listar agendamentos)
         if (event.httpMethod === 'GET') {
             const linhas = await abaAgendamentos.getRows();
             const agendamentos = linhas.map(linha => linha.toObject());
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
         }
 
-        // Se o pedido for do tipo POST (para adicionar um novo agendamento)
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
             const novaLinha = { 
                 ID_Agendamento: "visita-" + new Date().getTime(), 
                 Data_Solicitacao: new Date().toISOString(), 
                 Status: "Pendente", 
-                ...dados // Adiciona todos os outros dados do formulário
+                ...dados
             };
             await abaAgendamentos.addRow(novaLinha);
-            // Futuramente, adicionaremos o envio de e-mail aqui
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", message: "Agendamento recebido!" }) };
         }
 
