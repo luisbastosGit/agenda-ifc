@@ -1,2 +1,6 @@
 [functions]
   directory = "netlify/functions/"
+
+[functions."lembretes-agendados"]
+  # Executa a função todos os dias às 10:00 UTC (07:00 no horário de Brasília)
+  schedule = "0 10 * * *"
