@@ -49,6 +49,8 @@
             const tbody = document.getElementById('agendamentos-tbody');
             const loadingMessage = document.getElementById('loading-message');
             const tableContainer = document.getElementById('table-container');
+            const modalTitle = document.getElementById('modal-title'); // Novo
+            const modalBody = document.getElementById('modal-body');   // Novo
             const bsModal = new bootstrap.Modal(document.getElementById('detalhesModal'));
 
             carregarAgendamentos();
@@ -72,7 +74,7 @@
                 tbody.innerHTML = '';
                 todosAgendamentos.forEach(agendamento => {
                     const tr = document.createElement('tr');
-                    tr.dataset.id = agendamento.ID_Agendamento; // Adiciona o ID na linha
+                    tr.dataset.id = agendamento.ID_Agendamento;
 
                     const statusBadge = getStatusBadge(agendamento.Status);
                     const actionsButtons = getActionsButtons(agendamento);
@@ -96,12 +98,24 @@
                 const agendamento = todosAgendamentos.find(a => a.ID_Agendamento === id);
 
                 if (action === 'detalhes') {
-                    // Lógica do botão Detalhes
-                    document.getElementById('modal-title').textContent = `Detalhes: ${agendamento.Nome_Escola}`;
-                    document.getElementById('modal-body').innerHTML = `<p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p><p><strong>Contato:</strong> ${agendamento.Email_Responsavel}</p><p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos}</p>`;
+                    // Lógica do botão Detalhes RESTAURADA
+                    modalTitle.textContent = `Detalhes: ${agendamento.Nome_Escola}`;
+                    modalBody.innerHTML = `
+                        <p><strong>ID:</strong> ${agendamento.ID_Agendamento}</p>
+                        <p><strong>Data da Solicitação:</strong> ${new Date(agendamento.Data_Solicitacao).toLocaleString('pt-BR')}</p>
+                        <hr>
+                        <p><strong>Escola:</strong> ${agendamento.Nome_Escola} (${agendamento.Cidade_Escola})</p>
+                        <p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p>
+                        <p><strong>Contato:</strong> ${agendamento.Email_Responsavel} / ${agendamento.Telefone_Responsavel}</p>
+                        <hr>
+                        <p><strong>Data da Visita:</strong> ${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')} (${agendamento.Periodo})</p>
+                        <p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos} (${agendamento.Faixa_Etaria} / ${agendamento.Ano_Letivo})</p>
+                        <p><strong>Objetivo:</strong> ${agendamento.Objetivo_Visita}</p>
+                        <p><strong>Almoço:</strong> ${agendamento.Pretende_Almocar}</p>
+                        <p><strong>Observações:</strong> ${agendamento.Observacoes || 'Nenhuma'}</p>
+                    `;
                     bsModal.show();
                 } else if (action === 'aprovar' || action === 'recusar') {
-                    // Lógica para Aprovar e Recusar
                     if (!confirm(`Tem certeza que deseja ${action} este agendamento?`)) return;
 
                     button.disabled = true;
@@ -109,18 +123,18 @@
 
                     fetch(SCRIPT_URL, {
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: action, id: id })
                     })
                     .then(res => res.json())
                     .then(data => {
                         if(data.status === 'sucesso') {
-                            // Atualiza os dados na tela sem recarregar
                             const agendamentoNaTela = todosAgendamentos.find(a => a.ID_Agendamento === id);
                             agendamentoNaTela.Status = (action === 'aprovar' ? 'Aprovado' : 'Recusado');
-                            renderizarTabela(); // Redesenha a tabela com o novo status
+                            renderizarTabela();
                         } else { throw new Error(data.message); }
                     }).catch(error => {
-                        alert('Ocorreu um erro ao atualizar o status.');
+                        alert('Ocorreu um erro ao atualizar o status: ' + error.message);
                         button.disabled = false;
                         button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
                     });
@@ -134,9 +148,9 @@
             }
 
             function getActionsButtons(agendamento) {
-                let buttons = `<button class="btn btn-sm btn-info" data-action="detalhes" data-id="${agendamento.ID_Agendamento}">Detalhes</button>`;
+                let buttons = `<button class="btn btn-sm btn-info me-1" data-action="detalhes" data-id="${agendamento.ID_Agendamento}">Detalhes</button>`;
                 if (agendamento.Status === 'Pendente') {
-                    buttons += `<button class="btn btn-sm btn-success" data-action="aprovar" data-id="${agendamento.ID_Agendamento}">Aprovar</button>`;
+                    buttons += `<button class="btn btn-sm btn-success me-1" data-action="aprovar" data-id="${agendamento.ID_Agendamento}">Aprovar</button>`;
                     buttons += `<button class="btn btn-sm btn-danger" data-action="recusar" data-id="${agendamento.ID_Agendamento}">Recusar</button>`;
                 }
                 return buttons;
