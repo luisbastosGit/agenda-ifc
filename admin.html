@@ -42,54 +42,47 @@
         </div>
     </div>
 
-    <script>
-        // ################### PASSO IMPORTANTE ###################
-        // COLE A SUA URL DO APP SCRIPT DENTRO DAS ASPAS ABAIXO
-        const SCRIPT_URL = "/.netlify/functions/agendamentos";
-        // ########################################################
+   <script>
+    const SCRIPT_URL = "/.netlify/functions/agendamentos";
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const tbody = document.getElementById('agendamentos-tbody');
-            const loadingMessage = document.getElementById('loading-message');
-            const tableContainer = document.getElementById('table-container');
+    document.addEventListener('DOMContentLoaded', function() {
+        const tbody = document.getElementById('agendamentos-tbody');
+        const loadingMessage = document.getElementById('loading-message');
+        const tableContainer = document.getElementById('table-container');
 
-            // Busca os dados na nossa planilha assim que a página carrega
-            fetch(SCRIPT_URL)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'sucesso' && data.dados.length > 0) {
-                        // Limpa a tabela antes de adicionar os novos dados
+        // Usando GET para buscar os dados
+        fetch(SCRIPT_URL)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'sucesso' && data.dados) {
+                    if (data.dados.length > 0) {
                         tbody.innerHTML = '';
-
-                        // Para cada agendamento recebido, cria uma nova linha na tabela
                         data.dados.forEach(agendamento => {
                             const tr = document.createElement('tr');
                             tr.innerHTML = `
-                                <td>${agendamento.Data_Visita}</td>
+                                <td>${new Date(agendamento.Data_Visita).toLocaleDateString('pt-BR')}</td>
                                 <td>${agendamento.Nome_Escola}</td>
                                 <td>${agendamento.Nome_Responsavel}</td>
                                 <td><span class="badge bg-warning">${agendamento.Status}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-info">Detalhes</button>
-                                </td>
+                                <td><button class="btn btn-sm btn-info">Detalhes</button></td>
                             `;
                             tbody.appendChild(tr);
                         });
-
-                        // Esconde a mensagem de "Carregando" e mostra a tabela
-                        loadingMessage.style.display = 'none';
                         tableContainer.style.display = 'block';
-
                     } else {
                         loadingMessage.innerHTML = '<p>Nenhum agendamento encontrado.</p>';
                     }
-                })
-                .catch(error => {
-                    console.error('Erro ao buscar dados:', error);
-                    loadingMessage.innerHTML = '<p class="text-danger">Erro ao carregar os dados. Verifique o console.</p>';
-                });
-        });
-    </script>
+                    loadingMessage.style.display = 'none';
+                } else {
+                    throw new Error(data.message || 'Erro ao buscar dados.');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar dados:', error);
+                loadingMessage.innerHTML = `<p class="text-danger">Erro ao carregar os dados: ${error.message}</p>`;
+            });
+    });
+</script>
 
 </body>
 </html>
