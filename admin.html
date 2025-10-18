@@ -8,6 +8,7 @@
     <style>
         body { background-color: #f8f9fa; }
         .table-responsive { max-height: 70vh; }
+        .badge { font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -20,9 +21,7 @@
 
         <div class="card shadow-sm">
             <div class="card-body">
-                <div id="loading-message">
-                    <p>Carregando agendamentos...</p>
-                </div>
+                <div id="loading-message"><p>Carregando agendamentos...</p></div>
                 <div id="table-container" class="table-responsive" style="display: none;">
                     <table class="table table-striped table-hover">
                         <thead>
@@ -42,47 +41,96 @@
         </div>
     </div>
 
-   <script>
-    const SCRIPT_URL = "/.netlify/functions/agendamentos";
+    <div class="modal fade" id="detalhesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-title">Detalhes do Agendamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const tbody = document.getElementById('agendamentos-tbody');
-        const loadingMessage = document.getElementById('loading-message');
-        const tableContainer = document.getElementById('table-container');
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-        // Usando GET para buscar os dados
-        fetch(SCRIPT_URL)
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'sucesso' && data.dados) {
-                    if (data.dados.length > 0) {
-                        tbody.innerHTML = '';
-                        data.dados.forEach(agendamento => {
-                            const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td>${new Date(agendamento.Data_Visita).toLocaleDateString('pt-BR')}</td>
-                                <td>${agendamento.Nome_Escola}</td>
-                                <td>${agendamento.Nome_Responsavel}</td>
-                                <td><span class="badge bg-warning">${agendamento.Status}</span></td>
-                                <td><button class="btn btn-sm btn-info">Detalhes</button></td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                        tableContainer.style.display = 'block';
+    <script>
+        const SCRIPT_URL = "/.netlify/functions/agendamentos";
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const tbody = document.getElementById('agendamentos-tbody');
+            const loadingMessage = document.getElementById('loading-message');
+            const tableContainer = document.getElementById('table-container');
+            const modalEl = document.getElementById('detalhesModal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            const bsModal = new bootstrap.Modal(modalEl);
+
+            fetch(SCRIPT_URL)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'sucesso' && data.dados) {
+                        if (data.dados.length > 0) {
+                            tbody.innerHTML = '';
+                            data.dados.forEach(agendamento => {
+                                const tr = document.createElement('tr');
+                                // Adicionamos o atributo 'data-details' para guardar todos os dados do agendamento
+                                tr.innerHTML = `
+                                    <td>${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                    <td>${agendamento.Nome_Escola}</td>
+                                    <td>${agendamento.Nome_Responsavel}</td>
+                                    <td><span class="badge bg-warning text-dark">${agendamento.Status}</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info btn-detalhes" data-details='${JSON.stringify(agendamento)}'>Detalhes</button>
+                                    </td>
+                                `;
+                                tbody.appendChild(tr);
+                            });
+                            tableContainer.style.display = 'block';
+                        } else {
+                            loadingMessage.innerHTML = '<p>Nenhum agendamento encontrado.</p>';
+                        }
+                        loadingMessage.style.display = 'none';
                     } else {
-                        loadingMessage.innerHTML = '<p>Nenhum agendamento encontrado.</p>';
+                        throw new Error(data.message || 'Erro ao buscar dados.');
                     }
-                    loadingMessage.style.display = 'none';
-                } else {
-                    throw new Error(data.message || 'Erro ao buscar dados.');
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao buscar dados:', error);
-                loadingMessage.innerHTML = `<p class="text-danger">Erro ao carregar os dados: ${error.message}</p>`;
-            });
-    });
-</script>
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar dados:', error);
+                    loadingMessage.innerHTML = `<p class="text-danger">Erro ao carregar os dados: ${error.message}</p>`;
+                });
 
+            // LÓGICA PARA O BOTÃO DETALHES
+            tbody.addEventListener('click', function(event) {
+                if (event.target.classList.contains('btn-detalhes')) {
+                    const detailsString = event.target.getAttribute('data-details');
+                    const agendamento = JSON.parse(detailsString);
+
+                    modalTitle.textContent = `Detalhes: ${agendamento.Nome_Escola}`;
+                    modalBody.innerHTML = `
+                        <p><strong>ID:</strong> ${agendamento.ID_Agendamento}</p>
+                        <p><strong>Data da Solicitação:</strong> ${new Date(agendamento.Data_Solicitacao).toLocaleString('pt-BR')}</p>
+                        <hr>
+                        <p><strong>Escola:</strong> ${agendamento.Nome_Escola} (${agendamento.Cidade_Escola})</p>
+                        <p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p>
+                        <p><strong>Contato:</strong> ${agendamento.Email_Responsavel} / ${agendamento.Telefone_Responsavel}</p>
+                        <hr>
+                        <p><strong>Data da Visita:</strong> ${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')} (${agendamento.Periodo})</p>
+                        <p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos} (${agendamento.Faixa_Etaria} / ${agendamento.Ano_Letivo})</p>
+                        <p><strong>Objetivo:</strong> ${agendamento.Objetivo_Visita}</p>
+                        <p><strong>Almoço:</strong> ${agendamento.Pretende_Almocar}</p>
+                        <p><strong>Observações:</strong> ${agendamento.Observacoes || 'Nenhuma'}</p>
+                    `;
+
+                    bsModal.show();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
