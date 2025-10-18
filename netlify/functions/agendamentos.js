@@ -1,30 +1,25 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
+const nodemailer = require('nodemailer');
 
 // ################### PASSO IMPORTANTE ###################
 // CONFIRME SE O ID DA SUA PLANILHA V2 ESTÁ CORRETO
 const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
 // ########################################################
 
-// Pega o "envelope" Base64 da variável de ambiente
 const credenciaisBase64 = process.env.GOOGLE_CREDENTIALS;
-
-// Funções de e-mail (agora incluídas para o POST)
-// Para usar o Gmail, precisaremos de uma nova biblioteca. Por enquanto, vamos deixar a lógica pronta.
-// O envio de e-mail via Node.js requer mais configuração, vamos focar em salvar os dados primeiro.
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 
 exports.handler = async (event, context) => {
     try {
-        // Verifica se o envelope foi encontrado
-        if (!credenciaisBase64) {
-            throw new Error("Credenciais do Google (Base64) não foram encontradas.");
+        if (!credenciaisBase64 || !EMAIL_USER || !EMAIL_PASS) {
+            throw new Error("Credenciais do Google ou de E-mail não foram encontradas.");
         }
 
-        // Abre o envelope: decodifica o Base64 de volta para o formato JSON original
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
 
-        // O resto do código continua como antes
         const auth = new JWT({
             email: credenciais.client_email,
             key: credenciais.private_key,
@@ -35,41 +30,25 @@ exports.handler = async (event, context) => {
         await doc.loadInfo();
         const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
 
-        // Se o pedido for do tipo GET (para listar agendamentos no painel de admin)
         if (event.httpMethod === 'GET') {
             const linhas = await abaAgendamentos.getRows();
             const agendamentos = linhas.map(linha => linha.toObject());
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
         }
 
-        // Se o pedido for do tipo POST (para adicionar um novo agendamento do index.html)
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
-
-            // Monta o objeto da nova linha com os dados recebidos
             const novaLinha = { 
                 ID_Agendamento: "visita-" + new Date().getTime(), 
                 Data_Solicitacao: new Date().toISOString(), 
                 Status: "Pendente", 
-                Data_Visita: dados.dataVisita,
-                Periodo: dados.periodo,
-                Nome_Escola: dados.nomeEscola,
-                Cidade_Escola: dados.cidadeEscola,
-                Nome_Responsavel: dados.nomeResponsavel,
-                Telefone_Responsavel: dados.telefoneResponsavel,
-                Email_Responsavel: dados.emailResponsavel,
-                Qtd_Alunos: dados.qtdAlunos,
-                Faixa_Etaria: dados.faixaEtaria,
-                Ano_Letivo: dados.anoLetivo,
-                Objetivo_Visita: dados.objetivoVisita,
-                Pretende_Almocar: dados.pretendeAlmocar,
-                Observacoes: dados.observacoes
+                ...dados
             };
-
             await abaAgendamentos.addRow(novaLinha);
 
-            // NOTA: O envio de e-mails será nossa próxima etapa, pois requer uma configuração adicional (Nodemailer).
-            // Por enquanto, nosso foco é garantir que os dados sejam salvos corretamente.
+            // Dispara os e-mails de notificação
+            await enviarEmailParaAdmin(dados);
+            await enviarEmailParaVisitante(dados);
 
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", message: "Agendamento recebido!" }) };
         }
@@ -82,3 +61,54 @@ exports.handler = async (event, context) => {
         };
     }
 };
+
+// Função para enviar e-mail para a Coordenação de Extensão
+async function enviarEmailParaAdmin(dados) {
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+    });
+
+    await transporter.sendMail({
+        from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`,
+        to: "extensao.concordia@ifc.edu.br",
+        subject: `Nova Solicitação de Visita: ${dados.nomeEscola}`,
+        html: `
+            <p>Uma nova solicitação de agendamento de visita foi recebida através do site.</p>
+            <h3>Detalhes:</h3>
+            <ul>
+                <li><strong>Escola:</strong> ${dados.nomeEscola}</li>
+                <li><strong>Data da Visita:</strong> ${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</li>
+                <li><strong>Período:</strong> ${dados.periodo}</li>
+                <li><strong>Responsável:</strong> ${dados.nomeResponsavel}</li>
+                <li><strong>Contato:</strong> ${dados.emailResponsavel}</li>
+            </ul>
+            <p>O agendamento foi registrado na planilha e está aguardando aprovação no painel de gestão.</p>
+        `,
+    });
+}
+
+// Função para enviar e-mail de confirmação para o visitante
+async function enviarEmailParaVisitante(dados) {
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+    });
+
+    await transporter.sendMail({
+        from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`,
+        to: dados.emailResponsavel,
+        subject: "Recebemos sua solicitação de agendamento de visita!",
+        html: `
+            <p>Olá, ${dados.nomeResponsavel},</p>
+            <p>Recebemos com sucesso sua solicitação de agendamento de visita ao campus do IFC Concórdia para o dia <strong>${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>, no período ${dados.periodo}.</p>
+            <p>Sua solicitação está sendo analisada pela nossa equipe. Em breve, você receberá um novo e-mail com a confirmação e mais detalhes sobre a visita.</p>
+            <p>Qualquer dúvida, você pode entrar em contato conosco através deste e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p>
+            <p>Agradecemos o seu interesse!</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Coordenação de Extensão, Ensino, Estágios e Egressos</strong><br>
+            IFC Campus Concórdia</p>
+        `,
+    });
+}
