@@ -3,7 +3,7 @@ const { JWT } = require('google-auth-library');
 
 // ################### PASSO IMPORTANTE ###################
 // COLE O ID DA SUA PLANILHA V2 DENTRO DAS ASPAS ABAIXO
-const ID_PLANILHA = "SEU_ID_DA_PLANILHA_V2_AQUI";
+const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
 // ########################################################
 
 // Pega as credenciais da variável de ambiente segura do Netlify
