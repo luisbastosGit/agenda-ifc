@@ -14,36 +14,34 @@ const EMAIL_PASS = process.env.EMAIL_PASS;
 
 exports.handler = async (event, context) => {
     try {
+        // Bloco de inicialização e autenticação (sem mudanças)
         if (!credenciaisBase64 || !ID_PLANILHA || !EMAIL_USER || !EMAIL_PASS) {
             throw new Error("Credenciais não configuradas.");
         }
-
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
-
         const auth = new JWT({
             email: credenciais.client_email,
             key: credenciais.private_key,
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
-
         const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
         await doc.loadInfo();
         const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
         const linhas = await abaAgendamentos.getRows();
 
+        // Rota GET (sem mudanças)
         if (event.httpMethod === 'GET') {
             const agendamentos = linhas.map(linha => linha.toObject());
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
         }
 
+        // Rota POST (com a lógica da agenda corrigida)
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
-
             if (dados.action) {
                 const { action, id } = dados;
                 const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === id);
-
                 if (linhaParaAtualizar) {
                     const agendamento = linhaParaAtualizar.toObject();
                     if (action === 'aprovar') {
@@ -72,6 +70,7 @@ exports.handler = async (event, context) => {
     }
 };
 
+// --- FUNÇÃO DO GOOGLE AGENDA (CORRIGIDA) ---
 async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const calendar = google.calendar({ version: 'v3', auth });
     const dataVisita = new Date(`${agendamento.Data_Visita}T00:00:00-03:00`);
@@ -81,43 +80,44 @@ async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const dataFimISO = `${dataVisita.toISOString().split('T')[0]}T${horaFim}-03:00`;
 
     await calendar.events.insert({
-        calendarId: calendarId, sendNotifications: true,
+        calendarId: calendarId,
         requestBody: {
             summary: `Visita: ${agendamento.Nome_Escola}`,
-            description: `Responsável: ${agendamento.Nome_Responsavel}\nAlunos: ${agendamento.Qtd_Alunos}\nObjetivo: ${agendamento.Objetivo_Visita}`,
+            description: `Responsável: ${agendamento.Nome_Responsavel}\nContato: ${agendamento.Email_Responsavel}\nAlunos: ${agendamento.Qtd_Alunos}\nObjetivo: ${agendamento.Objetivo_Visita}`,
             start: { dateTime: dataInicioISO, timeZone: 'America/Sao_Paulo' },
             end: { dateTime: dataFimISO, timeZone: 'America/Sao_Paulo' },
-            attendees: [{ email: agendamento.Email_Responsavel }],
+            // A seção "attendees" (convidados) foi REMOVIDA para evitar o erro.
         },
     });
 }
 
+// --- FUNÇÕES DE E-MAIL (RESTAURADAS E COMPLETAS) ---
 const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: EMAIL_USER, pass: EMAIL_PASS } });
 
 async function enviarEmailParaAdmin(dados) {
     await transporter.sendMail({
-        from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `Nova Solicitação: ${dados.nomeEscola}`,
-        html: `<p>Nova solicitação recebida de ${dados.nomeEscola} para ${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}.</p>`,
+        from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `Nova Solicitação de Visita: ${dados.nomeEscola}`,
+        html: `<p>Uma nova solicitação de agendamento de visita foi recebida através do site.</p><h3>Detalhes:</h3><ul><li><strong>Escola:</strong> ${dados.nomeEscola}</li><li><strong>Data da Visita:</strong> ${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</li><li><strong>Responsável:</strong> ${dados.nomeResponsavel}</li><li><strong>Contato:</strong> ${dados.emailResponsavel}</li></ul><p>O agendamento foi registrado na planilha e está aguardando aprovação no painel de gestão.</p>`,
     });
 }
 
 async function enviarEmailParaVisitante(dados) {
     await transporter.sendMail({
-        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: dados.emailResponsavel, subject: `Recebemos sua solicitação de visita!`,
-        html: `<p>Olá, ${dados.nomeResponsavel},</p><p>Recebemos sua solicitação para o dia <strong>${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong> e estamos analisando.</p>`,
+        from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: dados.emailResponsavel, subject: "Recebemos sua solicitação de agendamento de visita!",
+        html: `<p>Olá, ${dados.nomeResponsavel},</p><p>Recebemos com sucesso sua solicitação de agendamento de visita ao campus do IFC Concórdia para o dia <strong>${new Date(dados.dataVisita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>, no período ${dados.periodo}.</p><p>Sua solicitação está sendo analisada pela nossa equipe. Em breve, você receberá um novo e-mail com a confirmação e mais detalhes sobre a visita.</p><p>Qualquer dúvida, você pode entrar em contato conosco através deste e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Agradecemos o seu interesse!</p><br><p>Atenciosamente,</p><p><strong>Coordenação de Extensão, Ensino, Estágios e Egressos</strong><br>IFC Campus Concórdia</p>`,
     });
 }
 
 async function enviarEmailDeAprovacao(agendamento) {
     await transporter.sendMail({
-        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: `✅ Agendamento Confirmado!`,
-        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Sua visita para o dia <strong>${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong> foi <strong>APROVADA</strong>.</p><p>Um convite foi enviado para sua agenda.</p>`,
+        from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: "✅ Agendamento de Visita Confirmado!",
+        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Boas notícias! Sua visita ao IFC Campus Concórdia para o dia <strong>${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')}</strong> foi <strong>APROVADA</strong>.</p><p>O evento já foi adicionado à nossa agenda. Estamos ansiosos para recebê-los!</p><p>Qualquer dúvida, você pode entrar em contato conosco através deste e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Atenciosamente,<br>Coordenação de Extensão</p>`,
     });
 }
 
 async function enviarEmailDeRecusa(agendamento) {
     await transporter.sendMail({
-        from: `"Coordenação de Extensão" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: `Sobre sua solicitação de visita`,
-        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Infelizmente, não poderemos confirmar seu agendamento para a data solicitada. Por favor, tente uma nova data em nosso site.</p>`,
+        from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: "Sobre sua solicitação de visita ao IFC Concórdia",
+        html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Agradecemos o seu interesse em visitar o IFC Campus Concórdia. Infelizmente, não poderemos confirmar seu agendamento para a data solicitada.</p><p>Gostaríamos de convidá-lo a tentar o agendamento para uma nova data em nosso site.</p><p>Para qualquer esclarecimento, estamos à disposição por este e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Atenciosamente,<br>Coordenação de Extensão</p>`,
     });
 }
