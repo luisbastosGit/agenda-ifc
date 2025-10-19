@@ -9,6 +9,8 @@
         body { background-color: #f8f9fa; }
         .login-container { max-width: 400px; margin: 5rem auto; }
         .main-container { display: none; } /* Começa escondido */
+        .actions-cell button { margin-right: 5px; }
+        .badge { font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -26,7 +28,7 @@
                         <button type="submit" class="btn btn-primary">Entrar</button>
                     </div>
                 </form>
-                <div id="login-error" class="text-danger mt-3" style="display: none;">Senha incorreta.</div>
+                <div id="login-error" class="text-danger mt-3" style="display: none;"></div>
             </div>
         </div>
     </div>
@@ -74,7 +76,6 @@
             const tableContainer = document.getElementById('table-container');
             const bsModal = new bootstrap.Modal(document.getElementById('detalhesModal'));
 
-            // LÓGICA DE LOGIN
             loginForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const password = passwordInput.value;
@@ -88,7 +89,6 @@
                 .then(response => response.json().then(data => ({ ok: response.ok, body: data })))
                 .then(({ ok, body }) => {
                     if (ok && body.status === 'sucesso') {
-                        // Salva a senha na sessão para usar depois (aprovar/recusar)
                         sessionStorage.setItem('adminPassword', password);
                         todosAgendamentos = body.dados;
                         loginSection.style.display = 'none';
@@ -132,13 +132,12 @@
                 
                 if (action === 'detalhes') {
                     document.getElementById('modal-title').textContent = `Detalhes: ${agendamento.Nome_Escola}`;
-                    document.getElementById('modal-body').innerHTML = `<p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p><p><strong>Contato:</strong> ${agendamento.Email_Responsavel}</p><p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos}</p>`;
+                    document.getElementById('modal-body').innerHTML = `<p><strong>ID:</strong> ${agendamento.ID_Agendamento}</p><p><strong>Data da Solicitação:</strong> ${new Date(agendamento.Data_Solicitacao).toLocaleString('pt-BR')}</p><hr><p><strong>Escola:</strong> ${agendamento.Nome_Escola} (${agendamento.Cidade_Escola})</p><p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p><p><strong>Contato:</strong> ${agendamento.Email_Responsavel} / ${agendamento.Telefone_Responsavel}</p><hr><p><strong>Data da Visita:</strong> ${new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR')} (${agendamento.Periodo})</p><p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos} (${agendamento.Faixa_Etaria} / ${agendamento.Ano_Letivo})</p><p><strong>Objetivo:</strong> ${agendamento.Objetivo_Visita}</p><p><strong>Almoço:</strong> ${agendamento.Pretende_Almocar}</p><p><strong>Observações:</strong> ${agendamento.Observacoes || 'Nenhuma'}</p>`;
                     bsModal.show();
                 } else if (action === 'aprovar' || action === 'recusar') {
                     if (!confirm(`Tem certeza que deseja ${action} este agendamento?`)) return;
                     button.disabled = true;
                     button.textContent = 'Aguarde...';
-
                     const password = sessionStorage.getItem('adminPassword');
 
                     fetch(SCRIPT_URL, {
@@ -161,8 +160,22 @@
                 }
             });
 
-            function getStatusBadge(status) { /* ...código do badge... */ }
-            function getActionsButtons(agendamento) { /* ...código dos botões... */ }
+            // FUNÇÃO RESTAURADA
+            function getStatusBadge(status) {
+                if (status === 'Aprovado') return `<span class="badge bg-success">${status}</span>`;
+                if (status === 'Recusado') return `<span class="badge bg-danger">${status}</span>`;
+                return `<span class="badge bg-warning text-dark">${status}</span>`;
+            }
+
+            // FUNÇÃO RESTAURADA
+            function getActionsButtons(agendamento) {
+                let buttons = `<button class="btn btn-sm btn-info me-1" data-action="detalhes" data-id="${agendamento.ID_Agendamento}">Detalhes</button>`;
+                if (agendamento.Status === 'Pendente') {
+                    buttons += `<button class="btn btn-sm btn-success me-1" data-action="aprovar" data-id="${agendamento.ID_Agendamento}">Aprovar</button>`;
+                    buttons += `<button class="btn btn-sm btn-danger" data-action="recusar" data-id="${agendamento.ID_Agendamento}">Recusar</button>`;
+                }
+                return buttons;
+            }
         });
     </script>
 </body>
