@@ -11,13 +11,21 @@
     <style>
         body { background-color: #f8f9fa; }
         .container { max-width: 900px; margin-top: 2rem; }
-        #calendario { font-size: 0.9em; cursor: pointer; }
+        #calendario { font-size: 0.9em; }
+        /* Estilo para dias indisponíveis */
+        .fc-day-disabled {
+            background-color: #e9ecef !important; /* Cor de fundo cinza */
+            cursor: not-allowed; /* Muda o cursor */
+        }
+        .fc-day-disabled .fc-daygrid-day-number {
+            color: #adb5bd; /* Deixa o número do dia mais claro */
+        }
     </style>
 </head>
 <body>
 
     <div class="container bg-white p-4 p-md-5 rounded shadow-sm">
-
+        
         <div class="text-center mb-4">
             <h2 class="display-6">Agenda de Visitas</h2>
             <p class="lead">Instituto Federal Catarinense - Campus Concórdia</p>
@@ -25,16 +33,17 @@
 
         <div id="area-calendario">
             <h4 class="mb-3">Selecione uma data para a visita:</h4>
-            <div id="calendario"></div> 
+            <div id="calendario-loading" class="text-center"><p>Carregando calendário...</p></div>
+            <div id="calendario" style="opacity: 0;"></div> 
         </div>
 
         <div id="area-formulario" style="display: none;">
             <h4>Formulário de Agendamento</h4>
             <p>Data da visita: <strong id="data-selecionada-texto"></strong></p>
             <hr>
-
             <form id="form-agendamento">
                 <input type="hidden" id="data-selecionada-input" name="dataVisita">
+                
                 <div class="row">
                     <div class="col-md-8 mb-3">
                         <label for="nomeEscola" class="form-label">Nome da Escola/Instituição</label>
@@ -45,7 +54,7 @@
                         <input type="text" class="form-control" id="cidadeEscola" name="cidadeEscola" required>
                     </div>
                 </div>
-
+                
                 <div class="row">
                     <div class="col-md-5 mb-3">
                         <label for="nomeResponsavel" class="form-label">Nome do Responsável</label>
@@ -119,7 +128,7 @@
                 </div>
 
                 <hr>
-
+                
                 <div class="d-flex justify-content-between">
                      <button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button>
                      <button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button>
@@ -130,31 +139,79 @@
 
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
     <script>
-        // ################### PASSO IMPORTANTE ###################
-        // COLE A SUA URL DO APP SCRIPT DENTRO DAS ASPAS ABAIXO
         const SCRIPT_URL = "/.netlify/functions/agendamentos";
-        // ########################################################
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             const areaCalendario = document.getElementById('area-calendario');
             const areaFormulario = document.getElementById('area-formulario');
             const dataSelecionadaTexto = document.getElementById('data-selecionada-texto');
             const dataSelecionadaInput = document.getElementById('data-selecionada-input');
             const btnVoltar = document.getElementById('btn-voltar');
             const calendarEl = document.getElementById('calendario');
+            const calendarLoadingEl = document.getElementById('calendario-loading');
             const formAgendamento = document.getElementById('form-agendamento');
             const btnEnviar = document.getElementById('btn-enviar');
 
+            let datasIndisponiveis = [];
+
+            // 1. Busca as datas indisponíveis ANTES de renderizar o calendário
+            try {
+                const response = await fetch(SCRIPT_URL); // Faz a chamada GET
+                const data = await response.json();
+                if (data.status === 'sucesso' && data.datas) {
+                    datasIndisponiveis = data.datas;
+                } else {
+                    console.error("Erro ao buscar datas:", data.message);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar datas:", error);
+                calendarLoadingEl.innerHTML = '<p class="text-danger">Erro ao carregar datas indisponíveis.</p>';
+                return; // Impede a renderização do calendário se houver erro
+            }
+
+            // 2. Configura e renderiza o calendário
             const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'pt-br',
                 headerToolbar: { left: 'prev', center: 'title', right: 'next' },
+                
+                // Marca os dias indisponíveis visualmente
+                events: datasIndisponiveis.map(data => ({
+                    start: data, // Formato AAAA-MM-DD
+                    display: 'background', // Mostra como fundo
+                    classNames: ['fc-day-disabled'] // Adiciona a classe CSS para estilo
+                })),
+                
+                // Impede o clique em datas passadas ou indisponíveis
                 dateClick: function(info) {
                     const dataClicada = new Date(info.dateStr + 'T12:00:00');
-                    dataSelecionadaTexto.textContent = dataClicada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    const hoje = new Date();
+                    hoje.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
+
+                    // Verifica se a data clicada está no passado
+                    if (dataClicada < hoje) {
+                        alert("Não é possível agendar em datas passadas.");
+                        return;
+                    }
+
+                    // Verifica se a data clicada está na lista de indisponíveis
+                    if (datasIndisponiveis.includes(info.dateStr)) {
+                        alert("Esta data não está disponível para agendamento.");
+                        return;
+                    }
+
+                    // Se a data for válida, continua o fluxo normal
+                    const opcoesFormato = { day: '2-digit', month: '2-digit', year: 'numeric' };
+                    dataSelecionadaTexto.textContent = dataClicada.toLocaleDateString('pt-BR', opcoesFormato);
                     dataSelecionadaInput.value = info.dateStr;
                     areaCalendario.style.display = 'none';
                     areaFormulario.style.display = 'block';
+                },
+                
+                // Esconde o loading e mostra o calendário quando estiver pronto
+                datesSet: function() {
+                    calendarLoadingEl.style.display = 'none';
+                    calendarEl.style.opacity = 1;
                 }
             });
             calendar.render();
@@ -164,44 +221,25 @@
                 areaCalendario.style.display = 'block';
             });
 
-            // NOVA LÓGICA PARA ENVIO DO FORMULÁRIO
             formAgendamento.addEventListener('submit', function(event) {
-                event.preventDefault(); // Impede o recarregamento da página
-
-                // Desabilita o botão para evitar cliques duplos
+                event.preventDefault(); 
                 btnEnviar.disabled = true;
                 btnEnviar.textContent = 'Enviando...';
-
                 const formData = new FormData(formAgendamento);
                 const dados = Object.fromEntries(formData.entries());
 
-                fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(dados)
+                fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) })
+                .then(response => response.json().then(data => ({ ok: response.ok, body: data })))
+                .then(({ ok, body }) => {
+                    if (ok && body.status === 'sucesso') {
+                        alert('Agendamento realizado com sucesso! Verifique seu e-mail.');
+                        window.location.reload();
+                    } else { throw new Error(body.message || 'Erro desconhecido.'); }
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'sucesso') {
-                        alert('Agendamento realizado com sucesso! Por favor, verifique seu e-mail para a confirmação.');
-                        formAgendamento.reset(); // Limpa o formulário
-                        areaFormulario.style.display = 'none';
-                        areaCalendario.style.display = 'block';
-                    } else {
-                        throw new Error(data.message || 'Ocorreu um erro desconhecido.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao enviar agendamento:', error);
-                    alert('Houve um erro ao enviar seu agendamento. Por favor, tente novamente.');
-                })
-                .finally(() => {
-                    // Reabilita o botão
-                    btnEnviar.disabled = false;
-                    btnEnviar.textContent = 'Enviar Agendamento';
-                });
+                .catch(error => { alert(`Houve um erro: ${error.message}`); })
+                .finally(() => { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar Agendamento'; });
             });
         });
     </script>
-
 </body>
 </html>
