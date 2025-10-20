@@ -20,6 +20,11 @@
         .fc-day-disabled .fc-daygrid-day-number {
             color: #adb5bd; /* Deixa o número do dia mais claro */
         }
+        /* Esconde Sábados e Domingos */
+        /* Note: FullCalendar com weekends:false já esconde, mas isso garante */
+        .fc-day-sat, .fc-day-sun { 
+             display: none !important; 
+        }
     </style>
 </head>
 <body>
@@ -32,7 +37,7 @@
         </div>
 
         <div id="area-calendario">
-            <h4 class="mb-3">Selecione uma data para a visita:</h4>
+            <h4 class="mb-3">Selecione uma data para a visita (Dias úteis):</h4>
             <div id="calendario-loading" class="text-center"><p>Carregando calendário...</p></div>
             <div id="calendario" style="opacity: 0;"></div> 
         </div>
@@ -154,19 +159,18 @@
 
             let datasIndisponiveis = [];
 
-            // 1. Busca as datas indisponíveis ANTES de renderizar o calendário
+            // 1. Busca as datas indisponíveis
             try {
-                const response = await fetch(SCRIPT_URL); // Faz a chamada GET
+                const response = await fetch(SCRIPT_URL); 
                 const data = await response.json();
                 if (data.status === 'sucesso' && data.datas) {
                     datasIndisponiveis = data.datas;
-                } else {
-                    console.error("Erro ao buscar datas:", data.message);
-                }
+                    console.log("Datas indisponíveis recebidas:", datasIndisponiveis); 
+                } else { throw new Error(data.message || 'Erro ao buscar datas'); }
             } catch (error) {
-                console.error("Erro ao buscar datas:", error);
+                console.error("Erro CRÍTICO ao buscar datas:", error);
                 calendarLoadingEl.innerHTML = '<p class="text-danger">Erro ao carregar datas indisponíveis.</p>';
-                return; // Impede a renderização do calendário se houver erro
+                return; 
             }
 
             // 2. Configura e renderiza o calendário
@@ -175,26 +179,28 @@
                 locale: 'pt-br',
                 headerToolbar: { left: 'prev', center: 'title', right: 'next' },
                 
-                // Marca os dias indisponíveis visualmente
+                // Esconde os finais de semana
+                weekends: false, 
+
+                // Marca os dias indisponíveis 
                 events: datasIndisponiveis.map(data => ({
                     start: data, // Formato AAAA-MM-DD
-                    display: 'background', // Mostra como fundo
-                    classNames: ['fc-day-disabled'] // Adiciona a classe CSS para estilo
+                    display: 'background', 
+                    classNames: ['fc-day-disabled'] 
                 })),
                 
                 // Impede o clique em datas passadas ou indisponíveis
                 dateClick: function(info) {
-                    const dataClicada = new Date(info.dateStr + 'T12:00:00');
+                    const dataClicada = new Date(info.dateStr + 'T12:00:00'); // Adiciona T12 para evitar fuso
                     const hoje = new Date();
-                    hoje.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
+                    hoje.setHours(0, 0, 0, 0); 
 
-                    // Verifica se a data clicada está no passado
                     if (dataClicada < hoje) {
                         alert("Não é possível agendar em datas passadas.");
                         return;
                     }
 
-                    // Verifica se a data clicada está na lista de indisponíveis
+                    // Verifica se a data clicada está na lista (formato AAAA-MM-DD)
                     if (datasIndisponiveis.includes(info.dateStr)) {
                         alert("Esta data não está disponível para agendamento.");
                         return;
@@ -203,12 +209,11 @@
                     // Se a data for válida, continua o fluxo normal
                     const opcoesFormato = { day: '2-digit', month: '2-digit', year: 'numeric' };
                     dataSelecionadaTexto.textContent = dataClicada.toLocaleDateString('pt-BR', opcoesFormato);
-                    dataSelecionadaInput.value = info.dateStr;
+                    dataSelecionadaInput.value = info.dateStr; // Salva como AAAA-MM-DD
                     areaCalendario.style.display = 'none';
                     areaFormulario.style.display = 'block';
                 },
                 
-                // Esconde o loading e mostra o calendário quando estiver pronto
                 datesSet: function() {
                     calendarLoadingEl.style.display = 'none';
                     calendarEl.style.opacity = 1;
@@ -216,11 +221,13 @@
             });
             calendar.render();
 
+            // 3. Lógica do botão Voltar
             btnVoltar.addEventListener('click', function() {
                 areaFormulario.style.display = 'none';
                 areaCalendario.style.display = 'block';
             });
 
+            // 4. Lógica do Submit do formulário
             formAgendamento.addEventListener('submit', function(event) {
                 event.preventDefault(); 
                 btnEnviar.disabled = true;
@@ -228,7 +235,11 @@
                 const formData = new FormData(formAgendamento);
                 const dados = Object.fromEntries(formData.entries());
 
-                fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) })
+                fetch(SCRIPT_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(dados) 
+                })
                 .then(response => response.json().then(data => ({ ok: response.ok, body: data })))
                 .then(({ ok, body }) => {
                     if (ok && body.status === 'sucesso') {
@@ -236,8 +247,14 @@
                         window.location.reload();
                     } else { throw new Error(body.message || 'Erro desconhecido.'); }
                 })
-                .catch(error => { alert(`Houve um erro: ${error.message}`); })
-                .finally(() => { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar Agendamento'; });
+                .catch(error => { 
+                    console.error('Erro ao enviar agendamento:', error);
+                    alert(`Houve um erro: ${error.message}`); 
+                })
+                .finally(() => { 
+                    btnEnviar.disabled = false; 
+                    btnEnviar.textContent = 'Enviar Agendamento'; 
+                });
             });
         });
     </script>
