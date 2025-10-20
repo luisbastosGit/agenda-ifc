@@ -31,44 +31,50 @@ exports.handler = async (event, context) => {
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
 
+            // --- NOVA ESTRUTURA LÓGICA CORRIGIDA ---
+
+            // AÇÃO DE LOGIN
             if (dados.action === 'login') {
-                if (dados.password === ADMIN_PASSWORD) {
-                    const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-                    await doc.loadInfo();
-                    const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-                    const linhas = await abaAgendamentos.getRows();
-                    const agendamentos = linhas.map(linha => linha.toObject());
-                    return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
-                } else {
+                if (dados.password !== ADMIN_PASSWORD) {
                     return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) };
                 }
-            }
+                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
+                await doc.loadInfo();
+                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+                const linhas = await abaAgendamentos.getRows();
+                const agendamentos = linhas.map(linha => linha.toObject());
+                return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
+            } 
 
-            if (dados.action === 'aprovar' || dados.action === 'recusar') {
+            // AÇÕES DE APROVAR/RECUSAR
+            else if (dados.action === 'aprovar' || dados.action === 'recusar') {
                 if (dados.password !== ADMIN_PASSWORD) return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
                 const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
                 await doc.loadInfo();
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
                 const linhas = await abaAgendamentos.getRows();
-                const { action, id } = dados;
-                const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === id);
+                const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === dados.id);
 
                 if (linhaParaAtualizar) {
                     const agendamento = linhaParaAtualizar.toObject();
-                    linhaParaAtualizar.set('Status', action === 'aprovar' ? 'Aprovado' : 'Recusado');
+                    const novoStatus = dados.action === 'aprovar' ? 'Aprovado' : 'Recusado';
+                    linhaParaAtualizar.set('Status', novoStatus);
                     linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
                     await linhaParaAtualizar.save();
-                    if (action === 'aprovar') {
+
+                    if (dados.action === 'aprovar') {
                         await enviarEmailDeAprovacao(agendamento);
                         await criarEventoNaAgenda(agendamento, auth, EMAIL_USER);
-                        await enviarEmailDeConfirmacaoParaAdmin(agendamento, "APROVADO");
                     } else {
                         await enviarEmailDeRecusa(agendamento);
-                        await enviarEmailDeConfirmacaoParaAdmin(agendamento, "RECUSADO");
                     }
+                    await enviarEmailDeConfirmacaoParaAdmin(agendamento, novoStatus.toUpperCase());
                     return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
                 }
-            } else {
+            } 
+
+            // NOVO AGENDAMENTO
+            else {
                 const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
                 await doc.loadInfo();
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
@@ -77,7 +83,13 @@ exports.handler = async (event, context) => {
                 if (agendamentoPendenteExistente) {
                     return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) };
                 }
-                const novaLinha = { ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente", ...dados };
+                const novaLinha = { 
+                    ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente",
+                    Data_Visita: dados.dataVisita, Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
+                    Nome_Responsavel: dados.nomeResponsavel, Telefone_Responsavel: dados.telefoneResponsavel, Email_Responsavel: dados.emailResponsavel,
+                    Qtd_Alunos: dados.qtdAlunos, Faixa_Etaria: dados.faixaEtaria, Ano_Letivo: dados.anoLetivo,
+                    Objetivo_Visita: dados.objetivoVisita, Pretende_Almocar: dados.pretendeAlmocar, Observacoes: dados.observacoes
+                };
                 await abaAgendamentos.addRow(novaLinha);
                 await enviarEmailParaAdmin(dados);
                 await enviarEmailParaVisitante(dados);
@@ -90,6 +102,7 @@ exports.handler = async (event, context) => {
     }
 };
 
+// --- Funções Auxiliares (completas) ---
 async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const calendar = google.calendar({ version: 'v3', auth });
     const dataVisita = new Date(`${agendamento.Data_Visita}T00:00:00-03:00`);
@@ -97,7 +110,6 @@ async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const horaFim = agendamento.Periodo === 'Matutino' ? '11:30:00' : '16:30:00';
     const dataInicioISO = `${dataVisita.toISOString().split('T')[0]}T${horaInicio}-03:00`;
     const dataFimISO = `${dataVisita.toISOString().split('T')[0]}T${horaFim}-03:00`;
-
     await calendar.events.insert({
         calendarId: calendarId,
         requestBody: {
