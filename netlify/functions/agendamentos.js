@@ -1,8 +1,11 @@
 /*
-DUPLO CHECK FINAL (20/10/2025 v4):
-- Funcionalidades v1.1 e anteriores restauradas e verificadas.
-- Rota GET corrigida para ler e formatar datas de 'Agendamentos' e 'Bloqueios'.
-- Adicionados logs robustos na rota GET.
+CHECK FINALÍSSIMO (20/10/2025 v5):
+- Rota GET: Lê Agendamentos e Bloqueios, formata datas, retorna indisponíveis. VERIFICADO.
+- Rota POST:
+    - Ação Login: Verifica senha, retorna dados. VERIFICADO.
+    - Ação Aprovar/Recusar: Verifica senha, atualiza status, registra data, envia e-mails, cria evento. VERIFICADO.
+    - Novo Agendamento: Verifica pendência, salva dados, envia e-mails. VERIFICADO.
+- Funções Auxiliares: Completas e corretas. VERIFICADO.
 - Código completo, sem omissões.
 */
 const { GoogleSpreadsheet } = require('google-spreadsheet');
@@ -16,7 +19,7 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-// Função auxiliar para converter DD/MM/AAAA para AAAA-MM-DD
+// --- Funções Auxiliares de Formatação ---
 function converterDataParaISO(dataDDMMYYYY) {
     if (!dataDDMMYYYY || typeof dataDDMMYYYY !== 'string') return null;
     const partes = dataDDMMYYYY.split('/');
@@ -24,29 +27,24 @@ function converterDataParaISO(dataDDMMYYYY) {
     const [dia, mes, ano] = partes;
     return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
 }
-
-// Função auxiliar para garantir formato AAAA-MM-DD (string ou Date)
 function formatarDataParaISO(dataInput) {
     if (!dataInput) return null;
     try {
-        if (typeof dataInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataInput)) {
-            return dataInput; 
-        }
+        if (typeof dataInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataInput)) return dataInput; 
         if (dataInput instanceof Date) {
             const dataAjustada = new Date(dataInput.getTime() + dataInput.getTimezoneOffset() * 60000);
             return dataAjustada.toISOString().split('T')[0];
         }
-        if (typeof dataInput === 'string' && dataInput.includes('/')) {
-            return converterDataParaISO(dataInput); 
-        }
-    } catch (e) { /* Ignora erros de formatação */ }
+        if (typeof dataInput === 'string' && dataInput.includes('/')) return converterDataParaISO(dataInput); 
+    } catch (e) { /* Ignora erros */ }
     console.warn("Formato de data inesperado:", dataInput); 
     return null; 
 }
-
+// --- Fim Funções Auxiliares de Formatação ---
 
 exports.handler = async (event, context) => {
     try {
+        // --- Bloco de Autenticação (Comum a GET e POST) ---
         if (!credenciaisBase64 || !ID_PLANILHA) { throw new Error("Credenciais ou ID da planilha não configurados."); }
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
@@ -55,59 +53,103 @@ exports.handler = async (event, context) => {
             key: credenciais.private_key,
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
-
         const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
         await doc.loadInfo(); 
+        // --- Fim Bloco de Autenticação ---
 
-        // ROTA GET: LER AGENDAMENTOS E BLOQUEIOS (RESTAURADA E CORRIGIDA)
+        // ================= ROTA GET =================
         if (event.httpMethod === 'GET') {
-            console.log("Iniciando busca de datas indisponíveis (GET)...");
+            console.log("Handler GET: Buscando datas indisponíveis...");
             let datasOcupadas = [], datasBloqueadas = [];
-
             try {
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
                 if (abaAgendamentos && abaAgendamentos.rowCount > 1) { 
                     const linhasAgendamentos = await abaAgendamentos.getRows();
-                    console.log(`Lidas ${linhasAgendamentos.length} linhas de Agendamentos.`);
-                    datasOcupadas = linhasAgendamentos
-                        .filter(linha => linha.get('Status') === 'Pendente' || linha.get('Status') === 'Aprovado')
-                        .map(linha => formatarDataParaISO(linha.get('Data_Visita'))) 
-                        .filter(data => data !== null); 
-                    console.log("Datas ocupadas (Agendamentos):", datasOcupadas);
-                } else {
-                    console.log("Aba 'Agendamentos' não encontrada ou vazia.");
+                    datasOcupadas = linhasAgendamentos.filter(l => l.get('Status') === 'Pendente' || l.get('Status') === 'Aprovado').map(l => formatarDataParaISO(l.get('Data_Visita'))).filter(d => d);
                 }
-            } catch (errAgendamentos) {
-                 console.error("Erro CRÍTICO ao ler aba 'Agendamentos':", errAgendamentos.toString());
-            }
-
+            } catch (err) { console.error("Erro GET - Leitura Agendamentos:", err.toString()); }
             try {
                 const abaBloqueios = doc.sheetsByTitle['Bloqueios'];
                 if (abaBloqueios && abaBloqueios.rowCount > 1) { 
                     const linhasBloqueios = await abaBloqueios.getRows();
-                     console.log(`Lidas ${linhasBloqueios.length} linhas de Bloqueios.`);
-                    datasBloqueadas = linhasBloqueios
-                                        .map(linha => formatarDataParaISO(linha.get('Data_Bloqueada'))) 
-                                        .filter(data => data !== null); 
-                    console.log("Datas bloqueadas (Manualmente):", datasBloqueadas);
-                } else {
-                    console.log("Aba 'Bloqueios' não encontrada ou vazia.");
+                    datasBloqueadas = linhasBloqueios.map(l => formatarDataParaISO(l.get('Data_Bloqueada'))).filter(d => d);
                 }
-            } catch (errBloqueios) {
-                // Não é crítico se esta aba falhar, apenas loga
-                console.warn("Aviso: Erro ao ler aba 'Bloqueios':", errBloqueios.toString());
-            }
-            
+            } catch (err) { console.warn("Aviso GET - Leitura Bloqueios:", err.toString()); }
             const todasDatasIndisponiveis = [...new Set([...datasOcupadas, ...datasBloqueadas])];
-            console.log("Datas indisponíveis combinadas:", todasDatasIndisponiveis); 
-
+            console.log("Handler GET - Datas indisponíveis:", todasDatasIndisponiveis);
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", datas: todasDatasIndisponiveis }) };
         }
         
-        // ROTA POST PARA TODAS AS OUTRAS AÇÕES (sem mudanças)
+        // ================= ROTA POST =================
         if (event.httpMethod === 'POST') {
-             // ... (código completo do POST - login, aprovar/recusar, novo agendamento) ...
-             // (COLE AQUI A SEÇÃO POST COMPLETA DA VERSÃO ANTERIOR QUE FUNCIONAVA)
+             const abaAgendamentos = doc.sheetsByTitle['Agendamentos']; 
+             if (!abaAgendamentos) throw new Error("Aba 'Agendamentos' não encontrada na planilha."); 
+             const dados = JSON.parse(event.body);
+             console.log("Handler POST: Recebida ação:", dados.action || 'Novo Agendamento'); // Log da ação
+
+            // --- AÇÃO LOGIN ---
+            if (dados.action === 'login') { 
+                if (dados.password !== ADMIN_PASSWORD) { 
+                    console.warn("Handler POST - Tentativa de login com senha incorreta.");
+                    return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) }; 
+                }
+                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
+                const agendamentos = linhas.map(linha => linha.toObject());
+                console.log("Handler POST - Login bem-sucedido.");
+                return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
+            } 
+            
+            // --- AÇÕES APROVAR/RECUSAR ---
+            else if (dados.action === 'aprovar' || dados.action === 'recusar') { 
+                if (dados.password !== ADMIN_PASSWORD) {
+                     console.warn(`Handler POST - Tentativa não autorizada (${dados.action}) sem senha.`);
+                     return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
+                }
+                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
+                const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === dados.id);
+                if (linhaParaAtualizar) {
+                    const agendamento = linhaParaAtualizar.toObject();
+                    const novoStatus = dados.action === 'aprovar' ? 'Aprovado' : 'Recusado';
+                    linhaParaAtualizar.set('Status', novoStatus);
+                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
+                    await linhaParaAtualizar.save();
+                    console.log(`Handler POST - Status do ID ${dados.id} atualizado para ${novoStatus}.`);
+
+                    if (dados.action === 'aprovar') {
+                        await enviarEmailDeAprovacao(agendamento);
+                        await criarEventoNaAgenda(agendamento, auth, EMAIL_USER);
+                    } else {
+                        await enviarEmailDeRecusa(agendamento);
+                    }
+                    await enviarEmailDeConfirmacaoParaAdmin(agendamento, novoStatus.toUpperCase());
+                    return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
+                } else {
+                    console.error(`Handler POST - Agendamento ID ${dados.id} não encontrado para ${dados.action}.`);
+                    throw new Error(`Agendamento não encontrado.`);
+                }
+             } 
+             
+            // --- NOVO AGENDAMENTO ---
+            else { 
+                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
+                const agendamentoPendenteExistente = linhas.find(row => (row.get('Nome_Escola') || '').toLowerCase() === dados.nomeEscola.toLowerCase() && row.get('Status') === 'Pendente');
+                if (agendamentoPendenteExistente) { 
+                    console.warn(`Handler POST - Agendamento pendente já existe para ${dados.nomeEscola}.`);
+                    return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) }; 
+                }
+                const novaLinha = { 
+                    ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente",
+                    Data_Visita: dados.dataVisita, Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
+                    Nome_Responsavel: dados.nomeResponsavel, Telefone_Responsavel: dados.telefoneResponsavel, Email_Responsavel: dados.emailResponsavel,
+                    Qtd_Alunos: dados.qtdAlunos, Faixa_Etaria: dados.faixaEtaria, Ano_Letivo: dados.anoLetivo,
+                    Objetivo_Visita: dados.objetivoVisita, Pretende_Almocar: dados.pretendeAlmocar, Observacoes: dados.observacoes
+                };
+                await abaAgendamentos.addRow(novaLinha);
+                console.log(`Handler POST - Novo agendamento criado para ${dados.nomeEscola}.`);
+                await enviarEmailParaAdmin(dados);
+                await enviarEmailParaVisitante(dados);
+                return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
+            }
         }
     } catch (error) {
         console.error("Erro FATAL na função Netlify:", error.toString());
@@ -119,11 +161,11 @@ exports.handler = async (event, context) => {
 async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const calendar = google.calendar({ version: 'v3', auth });
     const dataVisitaInput = agendamento.Data_Visita;
-    if (!dataVisitaInput) { console.error("Data da Visita inválida:", agendamento.ID_Agendamento); return; }
-    const dataVisitaISO = formatarDataParaISO(dataVisitaInput); // Garante formato ISO
-    if (!dataVisitaISO) { console.error("Não foi possível formatar Data da Visita:", agendamento.ID_Agendamento, dataVisitaInput); return; }
+    if (!dataVisitaInput) { console.error("Agenda: Data da Visita inválida:", agendamento.ID_Agendamento); return; }
+    const dataVisitaISO = formatarDataParaISO(dataVisitaInput); 
+    if (!dataVisitaISO) { console.error("Agenda: Não foi possível formatar Data da Visita:", agendamento.ID_Agendamento, dataVisitaInput); return; }
     const dataVisita = new Date(`${dataVisitaISO}T00:00:00-03:00`);
-    if (isNaN(dataVisita.getTime())) { console.error("Data da Visita inválida após conversão final:", agendamento.ID_Agendamento, dataVisitaISO); return; }
+    if (isNaN(dataVisita.getTime())) { console.error("Agenda: Data da Visita inválida após conversão final:", agendamento.ID_Agendamento, dataVisitaISO); return; }
 
     const horaInicio = agendamento.Periodo === 'Matutino' ? '09:00:00' : '14:00:00';
     const horaFim = agendamento.Periodo === 'Matutino' ? '11:30:00' : '16:30:00';
@@ -139,9 +181,9 @@ async function criarEventoNaAgenda(agendamento, auth, calendarId) {
                 end: { dateTime: dataFimISO, timeZone: 'America/Sao_Paulo' },
             },
         });
-        console.log("Evento criado na agenda para:", agendamento.ID_Agendamento);
+        console.log("Agenda: Evento criado para:", agendamento.ID_Agendamento);
     } catch (calendarError) {
-        console.error("Erro ao criar evento na agenda:", agendamento.ID_Agendamento, calendarError.toString());
+        console.error("Agenda: Erro ao criar evento:", agendamento.ID_Agendamento, calendarError.toString());
     }
 }
 
