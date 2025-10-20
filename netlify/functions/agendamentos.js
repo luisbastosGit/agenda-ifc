@@ -17,9 +17,12 @@ const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
 
 // ################### PASSO IMPORTANTE ###################
-// CONFIRME SE O ID DA SUA PLANILHA V2 ESTÁ CORRETO
-const ID_PLANILHA = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI";
+// ID DA SUA PLANILHA PRINCIPAL (V2) ONDE FICAM OS AGENDAMENTOS
+const ID_PLANILHA_AGENDAMENTOS = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI"; 
 // ########################################################
+
+// ID DA PLANILHA SEPARADA ONDE FICAM OS BLOQUEIOS MANUAIS
+const ID_PLANILHA_BLOQUEIOS = "1uDe6aUNzY1-HnKzxyHb1ECtVUYdwSqDOYGOFbYSWQkI"; 
 
 const credenciaisBase64 = process.env.GOOGLE_CREDENTIALS;
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -28,7 +31,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 exports.handler = async (event, context) => {
     try {
-        if (!credenciaisBase64 || !ID_PLANILHA) { throw new Error("Credenciais não configuradas."); }
+        if (!credenciaisBase64 || !ID_PLANILHA_AGENDAMENTOS) { throw new Error("Credenciais ou ID da planilha principal não configurados."); }
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
         const auth = new JWT({
@@ -37,8 +40,37 @@ exports.handler = async (event, context) => {
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
 
-        const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-        await doc.loadInfo();
+        // ROTA GET: MUDANÇA PARA LER AS DUAS PLANILHAS
+        if (event.httpMethod === 'GET') {
+            // Conecta à planilha de Agendamentos
+            const docAgendamentos = new GoogleSpreadsheet(ID_PLANILHA_AGENDAMENTOS, auth);
+            await docAgendamentos.loadInfo();
+            const abaAgendamentos = docAgendamentos.sheetsByTitle['Agendamentos'];
+            const linhasAgendamentos = await abaAgendamentos.getRows();
+            const datasOcupadas = linhasAgendamentos
+                .filter(linha => linha.get('Status') === 'Pendente' || linha.get('Status') === 'Aprovado')
+                .map(linha => linha.get('Data_Visita'));
+
+            // Conecta à planilha de Bloqueios
+            let datasBloqueadas = [];
+            try {
+                const docBloqueios = new GoogleSpreadsheet(ID_PLANILHA_BLOQUEIOS, auth);
+                await docBloqueios.loadInfo();
+                const abaBloqueios = docBloqueios.sheetsByTitle['Bloqueios'];
+                if (abaBloqueios && abaBloqueios.rowCount > 1) {
+                    const linhasBloqueios = await abaBloqueios.getRows();
+                    datasBloqueadas = linhasBloqueios.map(linha => linha.get('Data_Bloqueada'));
+                }
+            } catch (errorBloqueio) {
+                console.warn("Aviso: Não foi possível carregar a planilha de Bloqueios. Verifique o ID ou as permissões.", errorBloqueio.toString());
+                // Continua mesmo se a planilha de bloqueios falhar
+            }
+            
+            // Combina as duas listas e remove duplicatas
+            const todasDatasIndisponiveis = [...new Set([...datasOcupadas, ...datasBloqueadas])];
+
+            return { statusCode: 200, body: JSON.stringify({ status: "sucesso", datas: todasDatasIndisponiveis }) };
+        }
         
         // ROTA GET: MUDANÇA PARA O CALENDÁRIO PÚBLICO
         if (event.httpMethod === 'GET') {
