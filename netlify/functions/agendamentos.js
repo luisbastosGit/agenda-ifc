@@ -1,3 +1,16 @@
+/*
+DUPLO CHECK REALIZADO:
+- Funcionalidades da versão anterior preservadas:
+  - Login com senha.
+  - Criação de novo agendamento (com verificação de pendência).
+  - Ações de Aprovar/Recusar.
+  - Envio de todos os e-mails (solicitação, aprovação, recusa, notificação para admin).
+  - Criação de evento no Google Agenda ao aprovar.
+  - Registro da Data_Resposta na planilha.
+- Nova funcionalidade adicionada:
+  - A rota GET agora busca e retorna a lista de datas indisponíveis (status Pendente/Aprovado + datas da aba Bloqueios).
+*/
+
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const { google } = require('googleapis');
@@ -26,21 +39,35 @@ exports.handler = async (event, context) => {
 
         const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
         await doc.loadInfo();
-        const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-        const linhas = await abaAgendamentos.getRows();
-
+        
+        // ROTA GET: MUDANÇA PARA O CALENDÁRIO PÚBLICO
         if (event.httpMethod === 'GET') {
-            const agendamentos = linhas.map(linha => linha.toObject());
-            return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
+            const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+            const linhasAgendamentos = await abaAgendamentos.getRows();
+            const datasOcupadas = linhasAgendamentos
+                .filter(linha => linha.get('Status') === 'Pendente' || linha.get('Status') === 'Aprovado')
+                .map(linha => linha.get('Data_Visita'));
+
+            const abaBloqueios = doc.sheetsByTitle['Bloqueios'];
+            // Verifica se a aba 'Bloqueios' existe e tem linhas antes de tentar ler
+            const datasBloqueadas = (abaBloqueios && abaBloqueios.rowCount > 1) 
+                ? (await abaBloqueios.getRows()).map(linha => linha.get('Data_Bloqueada')) 
+                : [];
+            
+            // Combina as duas listas e remove duplicatas
+            const todasDatasIndisponiveis = [...new Set([...datasOcupadas, ...datasBloqueadas])];
+
+            return { statusCode: 200, body: JSON.stringify({ status: "sucesso", datas: todasDatasIndisponiveis }) };
         }
 
+        // ROTA POST PARA TODAS AS OUTRAS AÇÕES
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
+            const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+            const linhas = await abaAgendamentos.getRows();
 
             if (dados.action === 'login') {
-                if (dados.password !== ADMIN_PASSWORD) {
-                    return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) };
-                }
+                if (dados.password !== ADMIN_PASSWORD) { return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) }; }
                 const agendamentos = linhas.map(linha => linha.toObject());
                 return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
             } 
@@ -48,7 +75,6 @@ exports.handler = async (event, context) => {
             else if (dados.action === 'aprovar' || dados.action === 'recusar') {
                 if (dados.password !== ADMIN_PASSWORD) return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
                 const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === dados.id);
-
                 if (linhaParaAtualizar) {
                     const agendamento = linhaParaAtualizar.toObject();
                     const novoStatus = dados.action === 'aprovar' ? 'Aprovado' : 'Recusado';
@@ -68,15 +94,8 @@ exports.handler = async (event, context) => {
             } 
             
             else { // Novo Agendamento
-                // AQUI ESTÁ A CORREÇÃO FINAL: Proteção contra linhas vazias
-                const agendamentoPendenteExistente = linhas.find(row => 
-                    (row.get('Nome_Escola') || '').toLowerCase() === dados.nomeEscola.toLowerCase() && 
-                    row.get('Status') === 'Pendente'
-                );
-
-                if (agendamentoPendenteExistente) {
-                    return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) };
-                }
+                const agendamentoPendenteExistente = linhas.find(row => (row.get('Nome_Escola') || '').toLowerCase() === dados.nomeEscola.toLowerCase() && row.get('Status') === 'Pendente');
+                if (agendamentoPendenteExistente) { return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) }; }
                 const novaLinha = { 
                     ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente",
                     Data_Visita: dados.dataVisita, Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
@@ -96,7 +115,7 @@ exports.handler = async (event, context) => {
     }
 };
 
-// --- Funções Auxiliares (completas) ---
+// --- Funções Auxiliares Completas ---
 async function criarEventoNaAgenda(agendamento, auth, calendarId) {
     const calendar = google.calendar({ version: 'v3', auth });
     const dataVisita = new Date(`${agendamento.Data_Visita}T00:00:00-03:00`);
