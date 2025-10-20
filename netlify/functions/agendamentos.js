@@ -24,35 +24,29 @@ exports.handler = async (event, context) => {
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
 
+        const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
+        await doc.loadInfo();
+        const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
+        const linhas = await abaAgendamentos.getRows();
+
         if (event.httpMethod === 'GET') {
-            return { statusCode: 200, body: "API de agendamentos está online." };
+            const agendamentos = linhas.map(linha => linha.toObject());
+            return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
         }
 
         if (event.httpMethod === 'POST') {
             const dados = JSON.parse(event.body);
 
-            // --- NOVA ESTRUTURA LÓGICA CORRIGIDA ---
-
-            // AÇÃO DE LOGIN
             if (dados.action === 'login') {
                 if (dados.password !== ADMIN_PASSWORD) {
                     return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) };
                 }
-                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-                await doc.loadInfo();
-                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-                const linhas = await abaAgendamentos.getRows();
                 const agendamentos = linhas.map(linha => linha.toObject());
                 return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
             } 
-
-            // AÇÕES DE APROVAR/RECUSAR
+            
             else if (dados.action === 'aprovar' || dados.action === 'recusar') {
                 if (dados.password !== ADMIN_PASSWORD) return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
-                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-                await doc.loadInfo();
-                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-                const linhas = await abaAgendamentos.getRows();
                 const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === dados.id);
 
                 if (linhaParaAtualizar) {
@@ -72,14 +66,14 @@ exports.handler = async (event, context) => {
                     return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
                 }
             } 
+            
+            else { // Novo Agendamento
+                // AQUI ESTÁ A CORREÇÃO FINAL: Proteção contra linhas vazias
+                const agendamentoPendenteExistente = linhas.find(row => 
+                    (row.get('Nome_Escola') || '').toLowerCase() === dados.nomeEscola.toLowerCase() && 
+                    row.get('Status') === 'Pendente'
+                );
 
-            // NOVO AGENDAMENTO
-            else {
-                const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
-                await doc.loadInfo();
-                const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
-                const linhas = await abaAgendamentos.getRows();
-                const agendamentoPendenteExistente = linhas.find(row => row.get('Nome_Escola').toLowerCase() === dados.nomeEscola.toLowerCase() && row.get('Status') === 'Pendente');
                 if (agendamentoPendenteExistente) {
                     return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) };
                 }
