@@ -1,12 +1,8 @@
 /*
-CHECK FINALÍSSIMO (20/10/2025 v5):
-- Rota GET: Lê Agendamentos e Bloqueios, formata datas, retorna indisponíveis. VERIFICADO.
-- Rota POST:
-    - Ação Login: Verifica senha, retorna dados. VERIFICADO.
-    - Ação Aprovar/Recusar: Verifica senha, atualiza status, registra data, envia e-mails, cria evento. VERIFICADO.
-    - Novo Agendamento: Verifica pendência, salva dados, envia e-mails. VERIFICADO.
-- Funções Auxiliares: Completas e corretas. VERIFICADO.
-- Código completo, sem omissões.
+CHECK v1.3 (20/10/2025):
+- Funcionalidades v1.2 preservadas.
+- ALTERAÇÃO PONTUAL: Rota GET e Ação Login agora formatam as datas ('Data_Visita', 'Data_Solicitacao') para AAAA-MM-DD ANTES de enviar a resposta JSON. Isso padroniza a saída e simplifica o frontend.
+- Código completo, sem omissões. Destaques adicionados.
 */
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
@@ -44,7 +40,6 @@ function formatarDataParaISO(dataInput) {
 
 exports.handler = async (event, context) => {
     try {
-        // --- Bloco de Autenticação (Comum a GET e POST) ---
         if (!credenciaisBase64 || !ID_PLANILHA) { throw new Error("Credenciais ou ID da planilha não configurados."); }
         const credenciaisString = Buffer.from(credenciaisBase64, 'base64').toString('utf-8');
         const credenciais = JSON.parse(credenciaisString);
@@ -53,13 +48,13 @@ exports.handler = async (event, context) => {
             key: credenciais.private_key,
             scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar'],
         });
+
         const doc = new GoogleSpreadsheet(ID_PLANILHA, auth);
         await doc.loadInfo(); 
-        // --- Fim Bloco de Autenticação ---
 
         // ================= ROTA GET =================
         if (event.httpMethod === 'GET') {
-            console.log("Handler GET: Buscando datas indisponíveis...");
+            console.log("Iniciando busca de datas indisponíveis (GET)...");
             let datasOcupadas = [], datasBloqueadas = [];
             try {
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
@@ -76,7 +71,7 @@ exports.handler = async (event, context) => {
                 }
             } catch (err) { console.warn("Aviso GET - Leitura Bloqueios:", err.toString()); }
             const todasDatasIndisponiveis = [...new Set([...datasOcupadas, ...datasBloqueadas])];
-            console.log("Handler GET - Datas indisponíveis:", todasDatasIndisponiveis);
+            console.log("Datas indisponíveis combinadas:", todasDatasIndisponiveis); 
             return { statusCode: 200, body: JSON.stringify({ status: "sucesso", datas: todasDatasIndisponiveis }) };
         }
         
@@ -85,7 +80,7 @@ exports.handler = async (event, context) => {
              const abaAgendamentos = doc.sheetsByTitle['Agendamentos']; 
              if (!abaAgendamentos) throw new Error("Aba 'Agendamentos' não encontrada na planilha."); 
              const dados = JSON.parse(event.body);
-             console.log("Handler POST: Recebida ação:", dados.action || 'Novo Agendamento'); // Log da ação
+             console.log("Handler POST: Recebida ação:", dados.action || 'Novo Agendamento'); 
 
             // --- AÇÃO LOGIN ---
             if (dados.action === 'login') { 
@@ -93,25 +88,31 @@ exports.handler = async (event, context) => {
                     console.warn("Handler POST - Tentativa de login com senha incorreta.");
                     return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Senha incorreta." }) }; 
                 }
-                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
-                const agendamentos = linhas.map(linha => linha.toObject());
+                const linhas = await abaAgendamentos.getRows(); 
+                // ***** ALTERAÇÃO PONTUAL v1.3 *****
+                // Formata as datas ANTES de enviar para o frontend
+                const agendamentos = linhas.map(linha => {
+                    const obj = linha.toObject();
+                    obj.Data_Visita = formatarDataParaISO(obj.Data_Visita); 
+                    obj.Data_Solicitacao = formatarDataParaISO(obj.Data_Solicitacao);
+                    obj.Data_Resposta = formatarDataParaISO(obj.Data_Resposta);
+                    return obj;
+                });
+                // ***** FIM DA ALTERAÇÃO PONTUAL v1.3 *****
                 console.log("Handler POST - Login bem-sucedido.");
                 return { statusCode: 200, body: JSON.stringify({ status: "sucesso", dados: agendamentos }) };
             } 
             
             // --- AÇÕES APROVAR/RECUSAR ---
             else if (dados.action === 'aprovar' || dados.action === 'recusar') { 
-                if (dados.password !== ADMIN_PASSWORD) {
-                     console.warn(`Handler POST - Tentativa não autorizada (${dados.action}) sem senha.`);
-                     return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
-                }
-                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
+                if (dados.password !== ADMIN_PASSWORD) return { statusCode: 401, body: JSON.stringify({ status: "erro", message: "Não autorizado." }) };
+                const linhas = await abaAgendamentos.getRows(); 
                 const linhaParaAtualizar = linhas.find(row => row.get('ID_Agendamento') === dados.id);
                 if (linhaParaAtualizar) {
                     const agendamento = linhaParaAtualizar.toObject();
                     const novoStatus = dados.action === 'aprovar' ? 'Aprovado' : 'Recusado';
                     linhaParaAtualizar.set('Status', novoStatus);
-                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString());
+                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString().split('T')[0]); // Salva como AAAA-MM-DD
                     await linhaParaAtualizar.save();
                     console.log(`Handler POST - Status do ID ${dados.id} atualizado para ${novoStatus}.`);
 
@@ -124,30 +125,36 @@ exports.handler = async (event, context) => {
                     await enviarEmailDeConfirmacaoParaAdmin(agendamento, novoStatus.toUpperCase());
                     return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
                 } else {
-                    console.error(`Handler POST - Agendamento ID ${dados.id} não encontrado para ${dados.action}.`);
-                    throw new Error(`Agendamento não encontrado.`);
+                     console.error(`Handler POST - Agendamento ID ${dados.id} não encontrado para ${dados.action}.`);
+                     throw new Error(`Agendamento não encontrado.`);
                 }
              } 
              
             // --- NOVO AGENDAMENTO ---
             else { 
-                const linhas = await abaAgendamentos.getRows(); // Busca dados SÓ AQUI
+                const linhas = await abaAgendamentos.getRows(); 
                 const agendamentoPendenteExistente = linhas.find(row => (row.get('Nome_Escola') || '').toLowerCase() === dados.nomeEscola.toLowerCase() && row.get('Status') === 'Pendente');
                 if (agendamentoPendenteExistente) { 
                     console.warn(`Handler POST - Agendamento pendente já existe para ${dados.nomeEscola}.`);
                     return { statusCode: 400, body: JSON.stringify({ status: "erro", message: "Sua escola já possui um agendamento pendente." }) }; 
                 }
+                // Garante que a Data_Visita seja salva como AAAA-MM-DD
+                const dataVisitaFormatada = formatarDataParaISO(dados.dataVisita); 
+                if (!dataVisitaFormatada) throw new Error("Formato inválido para Data da Visita recebida.");
+
                 const novaLinha = { 
                     ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente",
-                    Data_Visita: dados.dataVisita, Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
+                    Data_Visita: dataVisitaFormatada, // Usa a data formatada
+                    Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
                     Nome_Responsavel: dados.nomeResponsavel, Telefone_Responsavel: dados.telefoneResponsavel, Email_Responsavel: dados.emailResponsavel,
                     Qtd_Alunos: dados.qtdAlunos, Faixa_Etaria: dados.faixaEtaria, Ano_Letivo: dados.anoLetivo,
                     Objetivo_Visita: dados.objetivoVisita, Pretende_Almocar: dados.pretendeAlmocar, Observacoes: dados.observacoes
                 };
                 await abaAgendamentos.addRow(novaLinha);
                 console.log(`Handler POST - Novo agendamento criado para ${dados.nomeEscola}.`);
-                await enviarEmailParaAdmin(dados);
-                await enviarEmailParaVisitante(dados);
+                // Envia os dados originais (que contêm dataVisita no formato esperado pelo email)
+                await enviarEmailParaAdmin(dados); 
+                await enviarEmailParaVisitante(dados); 
                 return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
             }
         }
