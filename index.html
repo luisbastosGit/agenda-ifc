@@ -4,156 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda de Visitas - IFC Concórdia</title>
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet">
-
     <style>
         body { background-color: #f8f9fa; }
         .container { max-width: 900px; margin-top: 2rem; }
         #calendario { font-size: 0.9em; }
-        /* Estilo para dias indisponíveis (ocupados/bloqueados) */
-        .fc-day-disabled {
+        
+        /* Estilo unificado para TODOS os dias não clicáveis */
+        .fc-day-disabled-visual {
             background-color: #e9ecef !important; 
-            cursor: not-allowed; 
+            cursor: not-allowed;
         }
-        .fc-day-disabled .fc-daygrid-day-number {
-            color: #adb5bd; 
+        .fc-day-disabled-visual .fc-daygrid-day-number {
+            color: #adb5bd !important; 
         }
+        
         /* Esconde Sábados e Domingos */
         .fc-day-sat, .fc-day-sun { 
              display: none !important; 
         }
-         /* Estilo para dias fora do range válido (passado e próximos 10 dias) */
-        /* FullCalendar aplica isso automaticamente com validRange, mas reforçamos */
-        .fc-day-past, 
-        .fc-day.fc-day-disabled { /* Se o dia estiver fora do range ou marcado como disabled */
-             background-color: #e9ecef !important;
-             cursor: not-allowed;
-        }
-         .fc-day-disabled .fc-daygrid-day-number,
-         .fc-day-past .fc-daygrid-day-number {
-             color: #adb5bd !important;
-        }
-        /* Garante que dias futuros DENTRO do range válido e NÃO bloqueados sejam clicáveis */
-         .fc-day-future:not(.fc-day-disabled) {
-            background-color: white !important; /* Cor padrão */
-            cursor: pointer;
-        }
-
     </style>
 </head>
 <body>
-
     <div class="container bg-white p-4 p-md-5 rounded shadow-sm">
-        
-        <div class="text-center mb-4">
-            <h2 class="display-6">Agenda de Visitas</h2>
-            <p class="lead">Instituto Federal Catarinense - Campus Concórdia</p>
-        </div>
-
+        <div class="text-center mb-4"><h2>Agenda de Visitas</h2><p class="lead">IFC Campus Concórdia</p></div>
         <div id="area-calendario">
             <h4 class="mb-3">Selecione uma data para a visita (Antecedência mínima de 10 dias):</h4>
             <div id="calendario-loading" class="text-center"><p>Carregando calendário...</p></div>
             <div id="calendario" style="opacity: 0;"></div> 
         </div>
-
         <div id="area-formulario" style="display: none;">
-             <h4>Formulário de Agendamento</h4>
-             <p>Data da visita: <strong id="data-selecionada-texto"></strong></p>
-             <hr>
+             <h4>Formulário de Agendamento</h4><p>Data da visita: <strong id="data-selecionada-texto"></strong></p><hr>
              <form id="form-agendamento">
                 <input type="hidden" id="data-selecionada-input" name="dataVisita">
-                
-                <div class="row">
-                    <div class="col-md-8 mb-3">
-                        <label for="nomeEscola" class="form-label">Nome da Escola/Instituição</label>
-                        <input type="text" class="form-control" id="nomeEscola" name="nomeEscola" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="cidadeEscola" class="form-label">Cidade da Escola</label>
-                        <input type="text" class="form-control" id="cidadeEscola" name="cidadeEscola" required>
-                    </div>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-5 mb-3">
-                        <label for="nomeResponsavel" class="form-label">Nome do Responsável</label>
-                        <input type="text" class="form-control" id="nomeResponsavel" name="nomeResponsavel" required>
-                    </div>
-                     <div class="col-md-3 mb-3">
-                        <label for="telefoneResponsavel" class="form-label">Telefone de Contato</label>
-                        <input type="tel" class="form-control" id="telefoneResponsavel" name="telefoneResponsavel" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="emailResponsavel" class="form-label">Email de Contato</label>
-                        <input type="email" class="form-control" id="emailResponsavel" name="emailResponsavel" required>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label for="qtdAlunos" class="form-label">Quantidade de Alunos</label>
-                        <input type="number" class="form-control" id="qtdAlunos" name="qtdAlunos" min="1" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="faixaEtaria" class="form-label">Faixa Etária (Ex: 12-14 anos)</label>
-                        <input type="text" class="form-control" id="faixaEtaria" name="faixaEtaria" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="anoLetivo" class="form-label">Ano Letivo (Ex: 8º ano)</label>
-                        <input type="text" class="form-control" id="anoLetivo" name="anoLetivo" required>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Período da Visita</label><br>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="periodo" id="periodoMatutino" value="Matutino" checked>
-                        <label class="form-check-label" for="periodoMatutino">Matutino</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="periodo" id="periodoVespertino" value="Vespertino">
-                        <label class="form-check-label" for="periodoVespertino">Vespertino</label>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label for="objetivoVisita" class="form-label">Principal Objetivo da Visita</label>
-                    <select class="form-select" id="objetivoVisita" name="objetivoVisita" required>
-                        <option value="" selected disabled>Selecione uma opção...</option>
-                        <option>Conhecer as instalações do curso de Técnico em Alimentos</option>
-                        <option>Conhecer as instalações do curso de Técnico em Agropecuária</option>
-                        <option>Conhecer as instalações do curso de Técnico em Informática</option>
-                        <option>Conhecer os Laboratórios (Física, Matemática, Alimentos, Química)</option>
-                        <option>Conhecer as instalações Gerais</option>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Pretendem almoçar no IFC?</label>
-                    <div class="form-text mt-0 mb-2">Custo de R$ 3,00 para alunos do ensino fundamental e médio, R$ 15,00 para demais. A compra do ticket é feita no dia da visita, no Campus.</div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoSim" value="Sim">
-                        <label class="form-check-label" for="almocoSim">Sim</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoNao" value="Não" checked>
-                        <label class="form-check-label" for="almocoNao">Não</label>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label for="observacoes" class="form-label">Observações (opcional)</label>
-                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
-                </div>
-
-                <hr>
-                
-                <div class="d-flex justify-content-between">
-                     <button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button>
-                     <button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button>
-                </div>
+                <div class="row"><div class="col-md-8 mb-3"><label for="nomeEscola" class="form-label">Nome da Escola/Instituição</label><input type="text" class="form-control" id="nomeEscola" name="nomeEscola" required></div><div class="col-md-4 mb-3"><label for="cidadeEscola" class="form-label">Cidade da Escola</label><input type="text" class="form-control" id="cidadeEscola" name="cidadeEscola" required></div></div>
+                <div class="row"><div class="col-md-5 mb-3"><label for="nomeResponsavel" class="form-label">Nome do Responsável</label><input type="text" class="form-control" id="nomeResponsavel" name="nomeResponsavel" required></div><div class="col-md-3 mb-3"><label for="telefoneResponsavel" class="form-label">Telefone de Contato</label><input type="tel" class="form-control" id="telefoneResponsavel" name="telefoneResponsavel" required></div><div class="col-md-4 mb-3"><label for="emailResponsavel" class="form-label">Email de Contato</label><input type="email" class="form-control" id="emailResponsavel" name="emailResponsavel" required></div></div>
+                <div class="row"><div class="col-md-4 mb-3"><label for="qtdAlunos" class="form-label">Quantidade de Alunos</label><input type="number" class="form-control" id="qtdAlunos" name="qtdAlunos" min="1" required></div><div class="col-md-4 mb-3"><label for="faixaEtaria" class="form-label">Faixa Etária (Ex: 12-14 anos)</label><input type="text" class="form-control" id="faixaEtaria" name="faixaEtaria" required></div><div class="col-md-4 mb-3"><label for="anoLetivo" class="form-label">Ano Letivo (Ex: 8º ano)</label><input type="text" class="form-control" id="anoLetivo" name="anoLetivo" required></div></div>
+                <div class="mb-3"><label class="form-label">Período da Visita</label><br><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="periodo" id="periodoMatutino" value="Matutino" checked><label class="form-check-label" for="periodoMatutino">Matutino</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="periodo" id="periodoVespertino" value="Vespertino"><label class="form-check-label" for="periodoVespertino">Vespertino</label></div></div>
+                <div class="mb-3"><label for="objetivoVisita" class="form-label">Principal Objetivo da Visita</label><select class="form-select" id="objetivoVisita" name="objetivoVisita" required><option value="" selected disabled>Selecione uma opção...</option><option>Conhecer as instalações do curso de Técnico em Alimentos</option><option>Conhecer as instalações do curso de Técnico em Agropecuária</option><option>Conhecer as instalações do curso de Técnico em Informática</option><option>Conhecer os Laboratórios (Física, Matemática, Alimentos, Química)</option><option>Conhecer as instalações Gerais</option></select></div>
+                <div class="mb-3"><label class="form-label">Pretendem almoçar no IFC?</label><div class="form-text mt-0 mb-2">Custo de R$ 3,00 para alunos do ensino fundamental e médio, R$ 15,00 para demais. A compra do ticket é feita no dia da visita, no Campus.</div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoSim" value="Sim"><label class="form-check-label" for="almocoSim">Sim</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoNao" value="Não" checked><label class="form-check-label" for="almocoNao">Não</label></div></div>
+                <div class="mb-3"><label for="observacoes" class="form-label">Observações (opcional)</label><textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea></div><hr>
+                <div class="d-flex justify-content-between"><button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button><button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button></div>
              </form>
         </div>
     </div>
@@ -173,15 +65,13 @@
             const formAgendamento = document.getElementById('form-agendamento');
             const btnEnviar = document.getElementById('btn-enviar');
 
-            let datasIndisponiveis = [];
+            let datasIndisponiveis = []; // Guarda AAAA-MM-DD
 
-            // 1. Busca as datas indisponíveis
             try {
                 const response = await fetch(SCRIPT_URL); 
                 const data = await response.json();
                 if (data.status === 'sucesso' && data.datas) {
                     datasIndisponiveis = data.datas;
-                    console.log("Datas indisponíveis recebidas:", datasIndisponiveis); 
                 } else { throw new Error(data.message || 'Erro ao buscar datas'); }
             } catch (error) {
                 console.error("Erro CRÍTICO ao buscar datas:", error);
@@ -191,57 +81,59 @@
 
             // Calcula a data mínima para agendamento (Hoje + 10 dias)
             const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0); // Zera hora para comparações
             const dataMinima = new Date(hoje);
             dataMinima.setDate(hoje.getDate() + 10);
-            const dataMinimaISO = dataMinima.toISOString().split('T')[0]; // Formato AAAA-MM-DD
-
-            // 2. Configura e renderiza o calendário
+            
             const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'pt-br',
                 headerToolbar: { left: 'prev', center: 'title', right: 'next' },
-                
-                // Esconde os finais de semana
                 weekends: false, 
-
-                // Define o intervalo de datas válidas para seleção
-                validRange: {
-                    start: dataMinimaISO // Só permite a partir de hoje + 10 dias
-                },
-
-                // Marca os dias indisponíveis (ocupados/bloqueados pela planilha)
-                events: datasIndisponiveis.map(data => ({
-                    start: data, // Formato AAAA-MM-DD
-                    display: 'background', 
-                    classNames: ['fc-day-disabled'] // Adiciona a classe para estilo
-                })),
                 
-                // Função executada ao clicar em uma data
+                // Eventos apenas para os dias ocupados/bloqueados
+                events: datasIndisponiveis.map(data => ({
+                    start: data, 
+                    display: 'background', 
+                    classNames: ['fc-day-disabled-visual'] // Classe unificada
+                })),
+
+                // ***** ALTERAÇÃO PONTUAL v1.5 *****
+                // Função para estilizar CADA dia ao ser renderizado
+                dayCellDidMount: function(info) {
+                    // Se o dia for anterior à data mínima permitida
+                    if (info.date < dataMinima) {
+                        info.el.classList.add('fc-day-disabled-visual'); // Aplica o estilo cinza
+                    }
+                    // Se o dia estiver na lista de indisponíveis (já tem o estilo via 'events', mas reforça)
+                    if (datasIndisponiveis.includes(info.dateStr)) {
+                         info.el.classList.add('fc-day-disabled-visual');
+                    }
+                },
+                // ***** FIM DA ALTERAÇÃO PONTUAL v1.5 *****
+                
                 dateClick: function(info) {
-                    const dataClicada = new Date(info.dateStr + 'T12:00:00'); // Adiciona T12 para evitar fuso
+                    const dataClicada = new Date(info.dateStr + 'T12:00:00'); 
                     
-                    // Verifica se a data clicada está na lista de indisponíveis (segurança extra)
+                    // Verifica se o dia é anterior à data mínima
+                    if (dataClicada < dataMinima) {
+                         alert("Não é possível agendar uma visita com menos de dez dias a contar da data atual.");
+                         return;
+                     }
+                    // Verifica se está na lista de bloqueados/ocupados
                     if (datasIndisponiveis.includes(info.dateStr)) {
                         alert("Esta data não está disponível para agendamento.");
                         return;
                     }
-                    
-                    // Verifica se o dia clicado está DENTRO do validRange (segurança extra)
-                    // (FullCalendar já deve impedir o clique, mas verificamos de novo)
-                    if (info.date < dataMinima) { 
-                         alert("Não é possível agendar uma visita com menos de dez dias a contar da data atual.");
-                         return;
-                     }
 
-                    // Se a data for válida, continua o fluxo normal
+                    // Continua o fluxo normal
                     const opcoesFormato = { day: '2-digit', month: '2-digit', year: 'numeric' };
                     dataSelecionadaTexto.textContent = dataClicada.toLocaleDateString('pt-BR', opcoesFormato);
-                    dataSelecionadaInput.value = info.dateStr; // Salva como AAAA-MM-DD
+                    dataSelecionadaInput.value = info.dateStr; 
                     areaCalendario.style.display = 'none';
                     areaFormulario.style.display = 'block';
                 },
                 
-                // Função executada quando o calendário termina de carregar
                 datesSet: function() {
                     calendarLoadingEl.style.display = 'none';
                     calendarEl.style.opacity = 1;
@@ -249,14 +141,12 @@
             });
             calendar.render();
 
-            // 3. Lógica do botão Voltar
             btnVoltar.addEventListener('click', function() {
                  areaFormulario.style.display = 'none';
                  areaCalendario.style.display = 'block';
-                 formAgendamento.reset(); // Limpa o formulário ao voltar
+                 formAgendamento.reset(); 
             });
 
-            // 4. Lógica do Submit do formulário
             formAgendamento.addEventListener('submit', function(event) {
                 event.preventDefault(); 
                 btnEnviar.disabled = true;
@@ -273,7 +163,7 @@
                 .then(({ ok, body }) => {
                     if (ok && body.status === 'sucesso') {
                         alert('Agendamento realizado com sucesso! Verifique seu e-mail.');
-                        window.location.reload(); // Recarrega a página inteira
+                        window.location.reload(); 
                     } else { throw new Error(body.message || 'Erro desconhecido.'); }
                 })
                 .catch(error => { 
