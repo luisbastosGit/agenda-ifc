@@ -12,19 +12,35 @@
         body { background-color: #f8f9fa; }
         .container { max-width: 900px; margin-top: 2rem; }
         #calendario { font-size: 0.9em; }
-        /* Estilo para dias indisponíveis */
+        /* Estilo para dias indisponíveis (ocupados/bloqueados) */
         .fc-day-disabled {
-            background-color: #e9ecef !important; /* Cor de fundo cinza */
-            cursor: not-allowed; /* Muda o cursor */
+            background-color: #e9ecef !important; 
+            cursor: not-allowed; 
         }
         .fc-day-disabled .fc-daygrid-day-number {
-            color: #adb5bd; /* Deixa o número do dia mais claro */
+            color: #adb5bd; 
         }
         /* Esconde Sábados e Domingos */
-        /* Note: FullCalendar com weekends:false já esconde, mas isso garante */
         .fc-day-sat, .fc-day-sun { 
              display: none !important; 
         }
+         /* Estilo para dias fora do range válido (passado e próximos 10 dias) */
+        /* FullCalendar aplica isso automaticamente com validRange, mas reforçamos */
+        .fc-day-past, 
+        .fc-day.fc-day-disabled { /* Se o dia estiver fora do range ou marcado como disabled */
+             background-color: #e9ecef !important;
+             cursor: not-allowed;
+        }
+         .fc-day-disabled .fc-daygrid-day-number,
+         .fc-day-past .fc-daygrid-day-number {
+             color: #adb5bd !important;
+        }
+        /* Garante que dias futuros DENTRO do range válido e NÃO bloqueados sejam clicáveis */
+         .fc-day-future:not(.fc-day-disabled) {
+            background-color: white !important; /* Cor padrão */
+            cursor: pointer;
+        }
+
     </style>
 </head>
 <body>
@@ -37,16 +53,16 @@
         </div>
 
         <div id="area-calendario">
-            <h4 class="mb-3">Selecione uma data para a visita (Dias úteis):</h4>
+            <h4 class="mb-3">Selecione uma data para a visita (Antecedência mínima de 10 dias):</h4>
             <div id="calendario-loading" class="text-center"><p>Carregando calendário...</p></div>
             <div id="calendario" style="opacity: 0;"></div> 
         </div>
 
         <div id="area-formulario" style="display: none;">
-            <h4>Formulário de Agendamento</h4>
-            <p>Data da visita: <strong id="data-selecionada-texto"></strong></p>
-            <hr>
-            <form id="form-agendamento">
+             <h4>Formulário de Agendamento</h4>
+             <p>Data da visita: <strong id="data-selecionada-texto"></strong></p>
+             <hr>
+             <form id="form-agendamento">
                 <input type="hidden" id="data-selecionada-input" name="dataVisita">
                 
                 <div class="row">
@@ -138,7 +154,7 @@
                      <button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button>
                      <button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button>
                 </div>
-            </form>
+             </form>
         </div>
     </div>
 
@@ -173,6 +189,12 @@
                 return; 
             }
 
+            // Calcula a data mínima para agendamento (Hoje + 10 dias)
+            const hoje = new Date();
+            const dataMinima = new Date(hoje);
+            dataMinima.setDate(hoje.getDate() + 10);
+            const dataMinimaISO = dataMinima.toISOString().split('T')[0]; // Formato AAAA-MM-DD
+
             // 2. Configura e renderiza o calendário
             const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
@@ -182,29 +204,34 @@
                 // Esconde os finais de semana
                 weekends: false, 
 
-                // Marca os dias indisponíveis 
+                // Define o intervalo de datas válidas para seleção
+                validRange: {
+                    start: dataMinimaISO // Só permite a partir de hoje + 10 dias
+                },
+
+                // Marca os dias indisponíveis (ocupados/bloqueados pela planilha)
                 events: datasIndisponiveis.map(data => ({
                     start: data, // Formato AAAA-MM-DD
                     display: 'background', 
-                    classNames: ['fc-day-disabled'] 
+                    classNames: ['fc-day-disabled'] // Adiciona a classe para estilo
                 })),
                 
-                // Impede o clique em datas passadas ou indisponíveis
+                // Função executada ao clicar em uma data
                 dateClick: function(info) {
                     const dataClicada = new Date(info.dateStr + 'T12:00:00'); // Adiciona T12 para evitar fuso
-                    const hoje = new Date();
-                    hoje.setHours(0, 0, 0, 0); 
-
-                    if (dataClicada < hoje) {
-                        alert("Não é possível agendar em datas passadas.");
-                        return;
-                    }
-
-                    // Verifica se a data clicada está na lista (formato AAAA-MM-DD)
+                    
+                    // Verifica se a data clicada está na lista de indisponíveis (segurança extra)
                     if (datasIndisponiveis.includes(info.dateStr)) {
                         alert("Esta data não está disponível para agendamento.");
                         return;
                     }
+                    
+                    // Verifica se o dia clicado está DENTRO do validRange (segurança extra)
+                    // (FullCalendar já deve impedir o clique, mas verificamos de novo)
+                    if (info.date < dataMinima) { 
+                         alert("Não é possível agendar uma visita com menos de dez dias a contar da data atual.");
+                         return;
+                     }
 
                     // Se a data for válida, continua o fluxo normal
                     const opcoesFormato = { day: '2-digit', month: '2-digit', year: 'numeric' };
@@ -214,6 +241,7 @@
                     areaFormulario.style.display = 'block';
                 },
                 
+                // Função executada quando o calendário termina de carregar
                 datesSet: function() {
                     calendarLoadingEl.style.display = 'none';
                     calendarEl.style.opacity = 1;
@@ -223,8 +251,9 @@
 
             // 3. Lógica do botão Voltar
             btnVoltar.addEventListener('click', function() {
-                areaFormulario.style.display = 'none';
-                areaCalendario.style.display = 'block';
+                 areaFormulario.style.display = 'none';
+                 areaCalendario.style.display = 'block';
+                 formAgendamento.reset(); // Limpa o formulário ao voltar
             });
 
             // 4. Lógica do Submit do formulário
@@ -244,7 +273,7 @@
                 .then(({ ok, body }) => {
                     if (ok && body.status === 'sucesso') {
                         alert('Agendamento realizado com sucesso! Verifique seu e-mail.');
-                        window.location.reload();
+                        window.location.reload(); // Recarrega a página inteira
                     } else { throw new Error(body.message || 'Erro desconhecido.'); }
                 })
                 .catch(error => { 
