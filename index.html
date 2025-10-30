@@ -77,7 +77,7 @@
         </div>
 
         <div id="area-calendario">
-            <h4 class="mb-3">Selecione uma data para a visita (Antecedência mínima de 10 dias):</h4>
+            <h4 class="mb-3">Selecione uma data para a visita (Antecedência mínima de 20 dias):</h4>
             <div id="calendario-loading" class="text-center"><p>Carregando calendário...</p></div>
             <div id="calendario" style="opacity: 0;"></div> 
         </div>
@@ -132,7 +132,7 @@
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0); 
             const dataMinima = new Date(hoje);
-            dataMinima.setDate(hoje.getDate() + 10);
+            dataMinima.setDate(hoje.getDate() + 20);
             
             const calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
