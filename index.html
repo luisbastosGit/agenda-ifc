@@ -159,7 +159,7 @@
                     const dataClicada = new Date(info.dateStr + 'T12:00:00'); 
                     
                     if (dataClicada < dataMinima) {
-                         alert("Não é possível agendar uma visita com menos de dez dias a contar da data atual.");
+                         alert("Não é possível agendar uma visita com menos de vinte dias a contar da data atual.");
                          return;
                      }
                     if (datasIndisponiveis.includes(info.dateStr)) {
