@@ -71,7 +71,8 @@
     <div class="container bg-white p-4 p-md-5 rounded shadow-sm">
         
         <div class="text-center mb-4 logo-container">
-            <img src="/img/logo-ifc-concordia.png.png" alt="Logo IFC Concórdia">
+            <!-- COMENTÁRIO DE ALTERAÇÃO (Linha 63): Ajustado o sufixo duplicado da imagem de .png.png para .png -->
+            <img src="/img/logo-ifc-concordia.png" alt="Logo IFC Concórdia">
             <h2 class="display-6 mt-3">Agenda de Visitas</h2>
             <p class="lead">Instituto Federal Catarinense - Campus Concórdia</p>
         </div>
@@ -93,7 +94,18 @@
                 <div class="row"><div class="col-md-4 mb-3"><label for="qtdAlunos" class="form-label">Quantidade de Alunos</label><input type="number" class="form-control" id="qtdAlunos" name="qtdAlunos" min="1" required></div><div class="col-md-4 mb-3"><label for="faixaEtaria" class="form-label">Faixa Etária (Ex: 12-14 anos)</label><input type="text" class="form-control" id="faixaEtaria" name="faixaEtaria" required></div><div class="col-md-4 mb-3"><label for="anoLetivo" class="form-label">Ano Letivo (Ex: 8º ano)</label><input type="text" class="form-control" id="anoLetivo" name="anoLetivo" required></div></div>
                 <div class="mb-3"><label class="form-label">Período da Visita</label><br><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="periodo" id="periodoMatutino" value="Matutino" checked><label class="form-check-label" for="periodoMatutino">Matutino</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="periodo" id="periodoVespertino" value="Vespertino"><label class="form-check-label" for="periodoVespertino">Vespertino</label></div></div>
                 <div class="mb-3"><label for="objetivoVisita" class="form-label">Principal Objetivo da Visita</label><select class="form-select" id="objetivoVisita" name="objetivoVisita" required><option value="" selected disabled>Selecione uma opção...</option><option>Conhecer as instalações do curso de Técnico em Alimentos</option><option>Conhecer as instalações do curso de Técnico em Agropecuária</option><option>Conhecer as instalações do curso de Técnico em Informática</option><option>Conhecer os Laboratórios (Física, Matemática, Alimentos, Química)</option><option>Conhecer as instalações Gerais</option><option>Participação na SEPE (Semana de Ensino, Pesquisa e Estensão)</option></select></div>
-                <div class="mb-3"><label class="form-label">Pretendem almoçar no IFC?</label><div class="form-text mt-0 mb-2">Custo de R$ 3,00 para alunos do ensino fundamental e médio, R$ 15,00 para demais. A compra do ticket deverá ser feita em até 7 dias antes da visita. Utilize o link para compra dos tickets. https://dap.concordia.ifc.edu.br/wp-content/uploads/sites/5/2026/03/Tutorial-PIX-Ticket-Refeicao-10.03.2026.pdf</div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoSim" value="Sim"><label class="form-check-label" for="almocoSim">Sim</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoNao" value="Não" checked><label class="form-check-label" for="almocoNao">Não</label></div></div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Pretendem almoçar no IFC?</label>
+                    <!-- COMENTÁRIO DE ALTERAÇÃO (Linhas 88 a 91): Adicionado hiperlink formatado na cor verde institucional para o tutorial em PDF de compra do ticket de refeição -->
+                    <div class="form-text mt-0 mb-2">
+                        Custo de R$ 3,00 para alunos do ensino fundamental e médio, R$ 15,00 para demais. A compra do ticket deverá ser feita em até 7 dias antes da visita. Utilize o link para compra dos tickets: 
+                        <a href="https://dap.concordia.ifc.edu.br/wp-content/uploads/sites/5/2026/03/Tutorial-PIX-Ticket-Refeicao-10.03.2026.pdf" target="_blank" style="color: var(--ifc-green); font-weight: bold; text-decoration: underline;">Tutorial PIX Ticket Refeição</a>
+                    </div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoSim" value="Sim"><label class="form-check-label" for="almocoSim">Sim</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pretendeAlmocar" id="almocoNao" value="Não" checked><label class="form-check-label" for="almocoNao">Não</label></div>
+                </div>
+                
                 <div class="mb-3"><label for="observacoes" class="form-label">Observações (opcional)</label><textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea></div><hr>
                 <div class="d-flex justify-content-between"><button type="button" id="btn-voltar" class="btn btn-secondary">Voltar ao Calendário</button><button type="submit" id="btn-enviar" class="btn btn-primary">Enviar Agendamento</button></div>
              </form>
