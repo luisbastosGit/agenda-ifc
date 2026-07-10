@@ -8,13 +8,13 @@
     <style>
          /* Cores IFC */
         :root {
-            --ifc-green: #008000; /* Verde Principal - Ajuste se necessário */
+            --ifc-green: #008000;
             --ifc-gray-light: #f8f9fa;
             --ifc-gray-medium: #e9ecef;
             --ifc-gray-dark: #adb5bd;
-            --ifc-success: #198754; /* Verde sucesso Bootstrap */
-            --ifc-danger: #dc3545; /* Vermelho danger Bootstrap */
-            --ifc-warning: #ffc107; /* Amarelo warning Bootstrap */
+            --ifc-success: #198754;
+            --ifc-danger: #dc3545;
+            --ifc-warning: #ffc107;
         }
         body { background-color: var(--ifc-gray-light); }
         .login-container { max-width: 400px; margin: 5rem auto; }
@@ -29,10 +29,10 @@
             border-color: var(--ifc-green);
         }
         .btn-primary:hover {
-            background-color: #006400; /* Verde mais escuro no hover */
+            background-color: #006400; 
             border-color: #006400;
         }
-         h1, h3 { color: var(--ifc-green); } /* Títulos em verde */
+         h1, h3 { color: var(--ifc-green); } 
          
          .badge.bg-success { background-color: var(--ifc-success) !important; }
          .badge.bg-danger { background-color: var(--ifc-danger) !important; }
@@ -40,7 +40,7 @@
 
          /* Espaço para o Logo */
          .logo-container img {
-             max-height: 60px; /* Ajuste a altura conforme necessário */
+             max-height: 60px; 
              width: auto;
              margin-bottom: 1rem;
          }
@@ -53,7 +53,7 @@
             <div class="card-body p-4 text-center">
                  <div class="logo-container">
                     <img src="/img/logo-ifc-concordia.png.png" alt="Logo IFC Concórdia">
-                    </div>
+                 </div>
                  <h3 class="card-title mb-4">Acesso ao Painel</h3>
                 <form id="login-form">
                     <div class="mb-3">
@@ -133,13 +133,24 @@
                         sessionStorage.setItem('adminPassword', password);
                         todosAgendamentos = body.dados;
 
-                        // ***** ALTERAÇÃO PONTUAL: ORDENAÇÃO CRONOLÓGICA DAS DATAS *****
-                        // Ordena o array de agendamentos pela Data_Visita, da mais próxima à mais futura
+                        // ***** ALTERAÇÃO PONTUAL: ORDENAÇÃO BLINDADA *****
                         todosAgendamentos.sort((a, b) => {
-                            // Adicionamos T12:00:00 para evitar que o JS mude o dia devido ao fuso horário na conversão
-                            const dataA = new Date(a.Data_Visita ? a.Data_Visita + 'T12:00:00' : '9999-12-31').getTime();
-                            const dataB = new Date(b.Data_Visita ? b.Data_Visita + 'T12:00:00' : '9999-12-31').getTime();
-                            return dataA - dataB;
+                            // Função interna que transforma DD/MM/AAAA ou AAAA-MM-DD em AAAA-MM-DD para comparação perfeita
+                            function padronizarParaComparacao(dataString) {
+                                if (!dataString) return '9999-12-31'; // Joga dados sem data para o final
+                                if (dataString.includes('/')) {
+                                    const partes = dataString.split('/');
+                                    if (partes.length === 3) return `${partes[2]}-${partes[1]}-${partes[0]}`;
+                                }
+                                return dataString; // Assume que já é AAAA-MM-DD
+                            }
+
+                            const dataA = padronizarParaComparacao(a.Data_Visita);
+                            const dataB = padronizarParaComparacao(b.Data_Visita);
+
+                            if (dataA < dataB) return -1;
+                            if (dataA > dataB) return 1;
+                            return 0;
                         });
                         // ***** FIM DA ALTERAÇÃO PONTUAL *****
 
@@ -166,10 +177,15 @@
                     const actionsButtons = getActionsButtons(agendamento);
 
                     let dataVisitaFormatada = 'Inválida';
-                    if (agendamento.Data_Visita && typeof agendamento.Data_Visita === 'string' && agendamento.Data_Visita.includes('-')) {
-                        const partes = agendamento.Data_Visita.split('-');
-                        if (partes.length === 3) {
-                             dataVisitaFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    if (agendamento.Data_Visita && typeof agendamento.Data_Visita === 'string') {
+                        if (agendamento.Data_Visita.includes('-')) {
+                            const partes = agendamento.Data_Visita.split('-');
+                            if (partes.length === 3) {
+                                 dataVisitaFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                            }
+                        } else if (agendamento.Data_Visita.includes('/')) {
+                            // Se já vier formatado da planilha como DD/MM/AAAA, exibe direto
+                            dataVisitaFormatada = agendamento.Data_Visita;
                         }
                     }
                     
@@ -220,20 +236,18 @@
                         } else { throw new Error(data.message); }
                     }).catch(error => {
                         alert('Ocorreu um erro ao atualizar o status: ' + error.message);
-                        button.disabled = false; // Reabilita em caso de erro
+                        button.disabled = false;
                         button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
                     });
                 }
             });
 
-            // FUNÇÃO PRESERVADA
             function getStatusBadge(status) {
                 if (status === 'Aprovado') return `<span class="badge bg-success">${status}</span>`;
                 if (status === 'Recusado') return `<span class="badge bg-danger">${status}</span>`;
-                return `<span class="badge bg-warning text-dark">${status}</span>`; // Usa text-dark para contraste no amarelo
+                return `<span class="badge bg-warning text-dark">${status}</span>`; 
             }
 
-            // FUNÇÃO PRESERVADA
             function getActionsButtons(agendamento) {
                 let buttons = `<button class="btn btn-sm btn-info me-1" data-action="detalhes" data-id="${agendamento.ID_Agendamento}">Detalhes</button>`;
                 if (agendamento.Status === 'Pendente') {
