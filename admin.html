@@ -132,6 +132,17 @@
                     if (ok && body.status === 'sucesso') {
                         sessionStorage.setItem('adminPassword', password);
                         todosAgendamentos = body.dados;
+
+                        // ***** ALTERAÇÃO PONTUAL: ORDENAÇÃO CRONOLÓGICA DAS DATAS *****
+                        // Ordena o array de agendamentos pela Data_Visita, da mais próxima à mais futura
+                        todosAgendamentos.sort((a, b) => {
+                            // Adicionamos T12:00:00 para evitar que o JS mude o dia devido ao fuso horário na conversão
+                            const dataA = new Date(a.Data_Visita ? a.Data_Visita + 'T12:00:00' : '9999-12-31').getTime();
+                            const dataB = new Date(b.Data_Visita ? b.Data_Visita + 'T12:00:00' : '9999-12-31').getTime();
+                            return dataA - dataB;
+                        });
+                        // ***** FIM DA ALTERAÇÃO PONTUAL *****
+
                         loginSection.style.display = 'none';
                         mainSection.style.display = 'block';
                         renderizarTabela();
@@ -235,5 +246,3 @@
     </script>
 </body>
 </html>
-
-
