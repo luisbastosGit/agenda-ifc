@@ -1,7 +1,8 @@
 /*
-CHECK FINALÍSSIMO v1.4 (20/10/2025):
-- Funcionalidades v1.3 preservadas.
-- ALTERAÇÃO PONTUAL: Corrigida a formatação da data (Data_Visita) DENTRO das funções de envio de e-mail para exibir DD/MM/AAAA corretamente.
+CHECK FINALÍSSIMO v1.5 (Atualizado):
+- Funcionalidades v1.4 preservadas.
+- ALTERAÇÃO PONTUAL: Rota GET alterada para permitir múltiplos agendamentos no mesmo dia. 
+  A data só será bloqueada se o status for explicitamente 'Bloqueado' ou se vier da aba 'Bloqueios'.
 - Código completo, sem omissões.
 */
 const { GoogleSpreadsheet } = require('google-spreadsheet');
@@ -61,7 +62,8 @@ exports.handler = async (event, context) => {
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
                 if (abaAgendamentos && abaAgendamentos.rowCount > 1) { 
                     const linhasAgendamentos = await abaAgendamentos.getRows();
-                    datasOcupadas = linhasAgendamentos.filter(l => l.get('Status') === 'Pendente' || l.get('Status') === 'Aprovado').map(l => formatarDataParaISO(l.get('Data_Visita'))).filter(d => d);
+                    // *** ALTERAÇÃO: Filtra apenas status 'Bloqueado' para permitir múltiplos agendamentos ***
+                    datasOcupadas = linhasAgendamentos.filter(l => l.get('Status') === 'Bloqueado').map(l => formatarDataParaISO(l.get('Data_Visita'))).filter(d => d);
                 }
             } catch (err) { console.error("Erro GET - Leitura Agendamentos:", err.toString()); }
             try {
@@ -146,8 +148,8 @@ exports.handler = async (event, context) => {
                 };
                 await abaAgendamentos.addRow(novaLinha);
                 console.log(`Handler POST - Novo agendamento criado para ${dados.nomeEscola}.`);
-                await enviarEmailParaAdmin(dados); // Envia os dados originais (dataVisita AAAA-MM-DD)
-                await enviarEmailParaVisitante(dados); // Envia os dados originais (dataVisita AAAA-MM-DD)
+                await enviarEmailParaAdmin(dados); 
+                await enviarEmailParaVisitante(dados); 
                 return { statusCode: 200, body: JSON.stringify({ status: "sucesso" }) };
             }
         }
@@ -189,14 +191,11 @@ async function criarEventoNaAgenda(agendamento, auth, calendarId) {
 
 const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: EMAIL_USER, pass: EMAIL_PASS } });
 
-// Função auxiliar para formatar AAAA-MM-DD para DD/MM/AAAA APENAS para e-mails
 function formatarDataParaEmail(dataISO) {
     if (!dataISO || typeof dataISO !== 'string') return 'Data Inválida';
     try {
-        // Adiciona um horário fixo e UTC para garantir parsing correto
         const dataObj = new Date(dataISO + 'T12:00:00Z'); 
         if (isNaN(dataObj.getTime())) return 'Data Inválida';
-        // Formata para o Brasil
         return dataObj.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }); 
     } catch (e) {
         console.error("Erro ao formatar data para e-mail:", dataISO, e);
@@ -205,9 +204,7 @@ function formatarDataParaEmail(dataISO) {
 }
 
 async function enviarEmailParaAdmin(dados) {
-    // ***** ALTERAÇÃO PONTUAL v1.4 *****
     const dataVisitaFormatada = formatarDataParaEmail(dados.dataVisita);
-    // ***** FIM DA ALTERAÇÃO PONTUAL v1.4 *****
     await transporter.sendMail({
         from: `"Agenda IFC Concórdia" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `Nova Solicitação de Visita: ${dados.nomeEscola}`,
         html: `<p>Uma nova solicitação de agendamento de visita foi recebida através do site.</p><h3>Detalhes:</h3><ul><li><strong>Escola:</strong> ${dados.nomeEscola}</li><li><strong>Data da Visita:</strong> ${dataVisitaFormatada}</li><li><strong>Responsável:</strong> ${dados.nomeResponsavel}</li><li><strong>Contato:</strong> ${dados.emailResponsavel}</li></ul><p>O agendamento foi registrado na planilha e está aguardando aprovação no painel de gestão.</p>`,
@@ -215,9 +212,7 @@ async function enviarEmailParaAdmin(dados) {
 }
 
 async function enviarEmailParaVisitante(dados) {
-    // ***** ALTERAÇÃO PONTUAL v1.4 *****
     const dataVisitaFormatada = formatarDataParaEmail(dados.dataVisita);
-    // ***** FIM DA ALTERAÇÃO PONTUAL v1.4 *****
     await transporter.sendMail({
         from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: dados.emailResponsavel, subject: "Recebemos sua solicitação de agendamento de visita!",
         html: `<p>Olá, ${dados.nomeResponsavel},</p><p>Recebemos com sucesso sua solicitação de agendamento de visita ao campus do IFC Concórdia para o dia <strong>${dataVisitaFormatada}</strong>, no período ${dados.periodo}.</p><p>Sua solicitação está sendo analisada pela nossa equipe. Em breve, você receberá um novo e-mail com a confirmação e mais detalhes sobre a visita.</p><p>Qualquer dúvida, você pode entrar em contato conosco através deste e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Agradecemos o seu interesse!</p><br><p>Atenciosamente,</p><p><strong>Coordenação de Extensão, Ensino, Estágios e Egressos</strong><br>IFC Campus Concórdia</p>`,
@@ -225,9 +220,7 @@ async function enviarEmailParaVisitante(dados) {
 }
 
 async function enviarEmailDeAprovacao(agendamento) {
-    // ***** ALTERAÇÃO PONTUAL v1.4 *****
     const dataVisitaFormatada = formatarDataParaEmail(agendamento.Data_Visita);
-    // ***** FIM DA ALTERAÇÃO PONTUAL v1.4 *****
     await transporter.sendMail({
         from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: "✅ Agendamento de Visita Confirmado!",
         html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Boas notícias! Sua visita ao IFC Campus Concórdia para o dia <strong>${dataVisitaFormatada}</strong> foi <strong>APROVADA</strong>.</p><p>O evento já foi adicionado à nossa agenda. Estamos ansiosos para recebê-los!</p><p>Qualquer dúvida, você pode entrar em contato conosco através deste e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Atenciosamente,<br>Coordenação de Extensão</p>`,
@@ -235,7 +228,6 @@ async function enviarEmailDeAprovacao(agendamento) {
 }
 
 async function enviarEmailDeRecusa(agendamento) {
-    // (Não precisa formatar data aqui)
     await transporter.sendMail({
         from: `"Coordenação de Extensão IFC Concórdia" <${EMAIL_USER}>`, to: agendamento.Email_Responsavel, subject: "Sobre sua solicitação de visita ao IFC Concórdia",
         html: `<p>Olá, ${agendamento.Nome_Responsavel},</p><p>Agradecemos o seu interesse em visitar o IFC Campus Concórdia. Infelizmente, não poderemos confirmar seu agendamento para a data solicitada.</p><p>Gostaríamos de convidá-lo a tentar o agendamento para uma nova data em nosso site.</p><p>Para qualquer esclarecimento, estamos à disposição por este e-mail ou pelo telefone/WhatsApp <strong>(49) 3341-4819</strong>.</p><p>Atenciosamente,<br>Coordenação de Extensão</p>`,
@@ -243,9 +235,7 @@ async function enviarEmailDeRecusa(agendamento) {
 }
 
 async function enviarEmailDeConfirmacaoParaAdmin(agendamento, statusFinal) {
-    // ***** ALTERAÇÃO PONTUAL v1.4 *****
     const dataVisitaFormatada = formatarDataParaEmail(agendamento.Data_Visita);
-    // ***** FIM DA ALTERAÇÃO PONTUAL v1.4 *****
     await transporter.sendMail({
         from: `"Sistema de Agendamentos" <${EMAIL_USER}>`, to: "extensao.concordia@ifc.edu.br", subject: `✅ ATUALIZAÇÃO: Agendamento de "${agendamento.Nome_Escola}" foi ${statusFinal}`,
         html: `<p>Este é um registro automático de ação.</p><p>O agendamento de visita para a escola <strong>${agendamento.Nome_Escola}</strong> (data da visita: ${dataVisitaFormatada}) foi <strong>${statusFinal}</strong> no painel de gestão.</p><p>A data desta resposta foi registrada na planilha.</p>`,
