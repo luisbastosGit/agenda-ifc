@@ -1,8 +1,7 @@
 /*
-CHECK FINALÍSSIMO v1.5 (Atualizado):
-- Funcionalidades v1.4 preservadas.
-- ALTERAÇÃO PONTUAL: Rota GET alterada para permitir múltiplos agendamentos no mesmo dia. 
-  A data só será bloqueada se o status for explicitamente 'Bloqueado' ou se vier da aba 'Bloqueios'.
+CHECK FINALÍSSIMO v1.6 (Atualizado):
+- Múltiplos agendamentos mantidos.
+- ALTERAÇÃO PONTUAL: Remoção da formatação forçada em 'Data_Solicitacao' na rota de login para preservar o timestamp da planilha.
 - Código completo, sem omissões.
 */
 const { GoogleSpreadsheet } = require('google-spreadsheet');
@@ -62,7 +61,6 @@ exports.handler = async (event, context) => {
                 const abaAgendamentos = doc.sheetsByTitle['Agendamentos'];
                 if (abaAgendamentos && abaAgendamentos.rowCount > 1) { 
                     const linhasAgendamentos = await abaAgendamentos.getRows();
-                    // *** ALTERAÇÃO: Filtra apenas status 'Bloqueado' para permitir múltiplos agendamentos ***
                     datasOcupadas = linhasAgendamentos.filter(l => l.get('Status') === 'Bloqueado').map(l => formatarDataParaISO(l.get('Data_Visita'))).filter(d => d);
                 }
             } catch (err) { console.error("Erro GET - Leitura Agendamentos:", err.toString()); }
@@ -92,8 +90,7 @@ exports.handler = async (event, context) => {
                 const agendamentos = linhas.map(linha => {
                     const obj = linha.toObject();
                     obj.Data_Visita = formatarDataParaISO(obj.Data_Visita); 
-                    obj.Data_Solicitacao = formatarDataParaISO(obj.Data_Solicitacao);
-                    obj.Data_Resposta = formatarDataParaISO(obj.Data_Resposta);
+                    // Removido formatarDataParaISO da Data_Solicitacao e Data_Resposta para preservar formato original com horas
                     return obj;
                 });
                 console.log("Handler POST - Login bem-sucedido.");
@@ -109,7 +106,7 @@ exports.handler = async (event, context) => {
                     const agendamento = linhaParaAtualizar.toObject();
                     const novoStatus = dados.action === 'aprovar' ? 'Aprovado' : 'Recusado';
                     linhaParaAtualizar.set('Status', novoStatus);
-                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString().split('T')[0]); 
+                    linhaParaAtualizar.set('Data_Resposta', new Date().toISOString()); // Usando ISO completo para registro
                     await linhaParaAtualizar.save();
                     console.log(`Handler POST - Status do ID ${dados.id} atualizado para ${novoStatus}.`);
 
@@ -139,7 +136,7 @@ exports.handler = async (event, context) => {
                 if (!dataVisitaFormatada) throw new Error("Formato inválido para Data da Visita recebida.");
 
                 const novaLinha = { 
-                    ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toISOString(), Status: "Pendente",
+                    ID_Agendamento: `visita-${new Date().getTime()}`, Data_Solicitacao: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }), Status: "Pendente",
                     Data_Visita: dataVisitaFormatada, // Salva como AAAA-MM-DD
                     Periodo: dados.periodo, Nome_Escola: dados.nomeEscola, Cidade_Escola: dados.cidadeEscola,
                     Nome_Responsavel: dados.nomeResponsavel, Telefone_Responsavel: dados.telefoneResponsavel, Email_Responsavel: dados.emailResponsavel,
