@@ -15,6 +15,7 @@
             --ifc-success: #198754; 
             --ifc-danger: #dc3545; 
             --ifc-warning: #ffc107; 
+            --ifc-secondary: #6c757d;
         }
         body { background-color: var(--ifc-gray-light); }
         .login-container { max-width: 400px; margin: 5rem auto; }
@@ -24,45 +25,23 @@
         th, td { white-space: nowrap; } 
 
         /* Ajustes de cor */
-        .btn-primary {
-            background-color: var(--ifc-green);
-            border-color: var(--ifc-green);
-        }
-        .btn-primary:hover {
-            background-color: #006400;
-            border-color: #006400;
-        }
-         h1, h3 { color: var(--ifc-green); }
+        .btn-primary { background-color: var(--ifc-green); border-color: var(--ifc-green); }
+        .btn-primary:hover { background-color: #006400; border-color: #006400; }
+        h1, h3, h5 { color: var(--ifc-green); }
          
-         .badge.bg-success { background-color: var(--ifc-success) !important; }
-         .badge.bg-danger { background-color: var(--ifc-danger) !important; }
-         .badge.bg-warning { background-color: var(--ifc-warning) !important; color: #000 !important; }
+        .badge.bg-success { background-color: var(--ifc-success) !important; }
+        .badge.bg-danger { background-color: var(--ifc-danger) !important; }
+        .badge.bg-warning { background-color: var(--ifc-warning) !important; color: #000 !important; }
+        .badge.bg-secondary { background-color: var(--ifc-secondary) !important; }
 
-         .logo-container img {
-             max-height: 60px;
-             width: auto;
-             margin-bottom: 1rem;
-         }
+        .logo-container img { max-height: 60px; width: auto; margin-bottom: 1rem; }
 
-         /* ***** ALTERAÇÃO PONTUAL: ESTILOS PARA ORDENAÇÃO ***** */
-         th.sortable { 
-             cursor: pointer; 
-             position: relative; 
-             padding-right: 1.5rem; 
-             user-select: none;
-         }
-         th.sortable:hover {
-             background-color: var(--ifc-gray-medium);
-         }
-         th.sortable::after { 
-             content: '\2195'; /* Seta dupla padrão */
-             position: absolute; 
-             right: 5px; 
-             opacity: 0.3; 
-         }
-         th.sortable.asc::after { content: '\2191'; opacity: 1; color: var(--ifc-green); } /* Seta para cima */
-         th.sortable.desc::after { content: '\2193'; opacity: 1; color: var(--ifc-green); } /* Seta para baixo */
-         /* ***** FIM DA ALTERAÇÃO PONTUAL ***** */
+        /* Estilos para Ordenação */
+        th.sortable { cursor: pointer; position: relative; padding-right: 1.5rem; user-select: none; }
+        th.sortable:hover { background-color: var(--ifc-gray-medium); }
+        th.sortable::after { content: '\2195'; position: absolute; right: 5px; opacity: 0.3; }
+        th.sortable.asc::after { content: '\2191'; opacity: 1; color: var(--ifc-green); }
+        th.sortable.desc::after { content: '\2193'; opacity: 1; color: var(--ifc-green); }
     </style>
 </head>
 <body>
@@ -72,7 +51,7 @@
             <div class="card-body p-4 text-center">
                  <div class="logo-container">
                     <img src="/img/logo-ifc-concordia.png.png" alt="Logo IFC Concórdia">
-                    </div>
+                 </div>
                  <h3 class="card-title mb-4">Acesso ao Painel</h3>
                 <form id="login-form">
                     <div class="mb-3">
@@ -95,6 +74,14 @@
          </div>
         <div class="card shadow-sm mt-4">
             <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Lista de Solicitações</h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="toggle-concluidos">
+                        <label class="form-check-label text-muted" for="toggle-concluidos">Mostrar eventos concluídos</label>
+                    </div>
+                </div>
+                
                 <div id="loading-message"><p>Carregando agendamentos...</p></div>
                 <div id="table-container" class="table-responsive" style="display: none;">
                     <table class="table table-striped table-hover align-middle">
@@ -104,8 +91,9 @@
                                 <th class="sortable" data-col="Nome_Escola">Escola</th>
                                 <th class="sortable" data-col="Cidade_Escola">Cidade</th>
                                 <th class="sortable" data-col="Qtd_Alunos">Nº Alunos</th>
-                                <th class="sortable" data-col="Status">Status</th>
-                                <th>Ações</th> </tr>
+                                <th class="sortable" data-col="statusExibicao">Status</th>
+                                <th>Ações</th>
+                            </tr>
                         </thead>
                         <tbody id="agendamentos-tbody"></tbody>
                     </table>
@@ -123,11 +111,8 @@
     <script>
         const SCRIPT_URL = "/.netlify/functions/agendamentos";
         let todosAgendamentos = [];
-
-        // ***** ALTERAÇÃO PONTUAL: VARIÁVEIS DE CONTROLE DE ORDENAÇÃO *****
         let colunaAtual = '';
         let ordemAscendente = true;
-        // ***** FIM DA ALTERAÇÃO PONTUAL *****
 
         document.addEventListener('DOMContentLoaded', function() {
             const loginSection = document.getElementById('login-section');
@@ -139,7 +124,8 @@
             const loadingMessage = document.getElementById('loading-message');
             const tableContainer = document.getElementById('table-container');
             const bsModal = new bootstrap.Modal(document.getElementById('detalhesModal'));
-            const cabecalhosOrdenaveis = document.querySelectorAll('th.sortable'); // Pega todos os cabeçalhos clicáveis
+            const cabecalhosOrdenaveis = document.querySelectorAll('th.sortable');
+            const toggleConcluidos = document.getElementById('toggle-concluidos');
 
             loginForm.addEventListener('submit', function(event) {
                 event.preventDefault();
@@ -155,7 +141,24 @@
                 .then(({ ok, body }) => {
                     if (ok && body.status === 'sucesso') {
                         sessionStorage.setItem('adminPassword', password);
-                        todosAgendamentos = body.dados;
+                        
+                        // Processar status de exibição baseando-se na data
+                        const hoje = new Date();
+                        hoje.setHours(0,0,0,0);
+                        
+                        todosAgendamentos = body.dados.map(agendamento => {
+                            let isPassado = false;
+                            if (agendamento.Data_Visita) {
+                                const parts = agendamento.Data_Visita.split('-');
+                                if (parts.length === 3) {
+                                    let dataEvento = new Date(parts[0], parts[1] - 1, parts[2]);
+                                    if (dataEvento < hoje) isPassado = true;
+                                }
+                            }
+                            agendamento.statusExibicao = isPassado ? 'Concluído' : agendamento.Status;
+                            return agendamento;
+                        });
+                        
                         loginSection.style.display = 'none';
                         mainSection.style.display = 'block';
                         renderizarTabela();
@@ -168,23 +171,18 @@
                 });
             });
 
-            // ***** ALTERAÇÃO PONTUAL: EVENTO DE CLIQUE NOS CABEÇALHOS E LÓGICA DE ORDENAÇÃO *****
+            toggleConcluidos.addEventListener('change', function() {
+                renderizarTabela();
+            });
+
             cabecalhosOrdenaveis.forEach(th => {
                 th.addEventListener('click', function() {
                     const colunaClicada = this.dataset.col;
+                    if (colunaAtual === colunaClicada) { ordemAscendente = !ordemAscendente; } 
+                    else { colunaAtual = colunaClicada; ordemAscendente = true; }
 
-                    if (colunaAtual === colunaClicada) {
-                        ordemAscendente = !ordemAscendente; // Inverte a ordem se clicar na mesma coluna
-                    } else {
-                        colunaAtual = colunaClicada;
-                        ordemAscendente = true; // Sempre começa ascendente ao trocar de coluna
-                    }
-
-                    // Limpa classes visuais de todos os cabeçalhos
                     cabecalhosOrdenaveis.forEach(c => { c.classList.remove('asc', 'desc'); });
-                    // Adiciona a classe visual correta no cabeçalho clicado
                     this.classList.add(ordemAscendente ? 'asc' : 'desc');
-
                     ordenarDados(colunaAtual, ordemAscendente);
                 });
             });
@@ -194,18 +192,13 @@
                     let valorA = a[coluna] || '';
                     let valorB = b[coluna] || '';
 
-                    // Tratamento específico para as Datas
                     if (coluna === 'Data_Visita') {
                         valorA = padronizarDataSort(valorA);
                         valorB = padronizarDataSort(valorB);
-                    } 
-                    // Tratamento específico para Números (Nº de Alunos)
-                    else if (coluna === 'Qtd_Alunos') {
+                    } else if (coluna === 'Qtd_Alunos') {
                         valorA = parseInt(valorA, 10) || 0;
                         valorB = parseInt(valorB, 10) || 0;
-                    } 
-                    // Tratamento para textos (Escola, Cidade, Status)
-                    else {
+                    } else {
                         valorA = valorA.toString().toLowerCase();
                         valorB = valorB.toString().toLowerCase();
                     }
@@ -221,36 +214,35 @@
                 if (!dataStr) return '00000000';
                 if (dataStr.includes('/')) {
                     const p = dataStr.split('/');
-                    if (p.length === 3) return `${p[2]}${p[1]}${p[0]}`; // Vira AAAAMMDD
+                    if (p.length === 3) return `${p[2]}${p[1]}${p[0]}`; 
                 }
                 if (dataStr.includes('-')) {
                     const p = dataStr.split('-');
-                    if (p.length === 3) return `${p[0]}${p[1]}${p[2]}`; // Vira AAAAMMDD
+                    if (p.length === 3) return `${p[0]}${p[1]}${p[2]}`; 
                 }
                 return dataStr;
             }
-            // ***** FIM DA ALTERAÇÃO PONTUAL *****
 
             function renderizarTabela() {
                 loadingMessage.style.display = 'none';
                 tableContainer.style.display = 'block';
                 tbody.innerHTML = '';
+                const mostrarConcluidos = toggleConcluidos.checked;
+
                 todosAgendamentos.forEach(agendamento => {
+                    if (agendamento.statusExibicao === 'Concluído' && !mostrarConcluidos) {
+                        return; // Oculta o item concluído se o toggle estiver desligado
+                    }
+
                     const tr = document.createElement('tr');
                     tr.dataset.id = agendamento.ID_Agendamento;
-                    const statusBadge = getStatusBadge(agendamento.Status);
+                    const statusBadge = getStatusBadge(agendamento.statusExibicao);
                     const actionsButtons = getActionsButtons(agendamento);
 
                     let dataVisitaFormatada = 'Inválida';
-                    if (agendamento.Data_Visita && typeof agendamento.Data_Visita === 'string') {
-                        if (agendamento.Data_Visita.includes('-')) {
-                            const partes = agendamento.Data_Visita.split('-');
-                            if (partes.length === 3) {
-                                 dataVisitaFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
-                            }
-                        } else if (agendamento.Data_Visita.includes('/')) {
-                            dataVisitaFormatada = agendamento.Data_Visita;
-                        }
+                    if (agendamento.Data_Visita) {
+                        const partes = agendamento.Data_Visita.split('-');
+                        if (partes.length === 3) dataVisitaFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
                     }
                     
                     tr.innerHTML = `
@@ -275,8 +267,19 @@
                 
                 if (action === 'detalhes') {
                     document.getElementById('modal-title').textContent = `Detalhes: ${agendamento.Nome_Escola}`;
-                    let dataVisitaModal = agendamento.Data_Visita ? new Date(agendamento.Data_Visita + 'T12:00:00').toLocaleDateString('pt-BR') : 'Inválida';
-                    let dataSolicitacaoModal = agendamento.Data_Solicitacao ? new Date(agendamento.Data_Solicitacao).toLocaleString('pt-BR') : 'Inválida';
+                    
+                    let dataVisitaModal = 'Inválida';
+                    if (agendamento.Data_Visita) {
+                        const p = agendamento.Data_Visita.split('-');
+                        if (p.length === 3) dataVisitaModal = `${p[2]}/${p[1]}/${p[0]}`;
+                    }
+                    
+                    // Exibição amigável para Data da Solicitação preservando o valor que vem do Google Sheets
+                    let dataSolicitacaoModal = agendamento.Data_Solicitacao;
+                    if (!dataSolicitacaoModal) { dataSolicitacaoModal = 'Data não registrada'; }
+                    else if (dataSolicitacaoModal.includes('T')) {
+                         dataSolicitacaoModal = new Date(dataSolicitacaoModal).toLocaleString('pt-BR');
+                    }
 
                     document.getElementById('modal-body').innerHTML = `<p><strong>ID:</strong> ${agendamento.ID_Agendamento}</p><p><strong>Data da Solicitação:</strong> ${dataSolicitacaoModal}</p><hr><p><strong>Escola:</strong> ${agendamento.Nome_Escola} (${agendamento.Cidade_Escola})</p><p><strong>Responsável:</strong> ${agendamento.Nome_Responsavel}</p><p><strong>Contato:</strong> ${agendamento.Email_Responsavel} / ${agendamento.Telefone_Responsavel}</p><hr><p><strong>Data da Visita:</strong> ${dataVisitaModal} (${agendamento.Periodo})</p><p><strong>Alunos:</strong> ${agendamento.Qtd_Alunos} (${agendamento.Faixa_Etaria} / ${agendamento.Ano_Letivo})</p><p><strong>Objetivo:</strong> ${agendamento.Objetivo_Visita}</p><p><strong>Almoço:</strong> ${agendamento.Pretende_Almocar}</p><p><strong>Observações:</strong> ${agendamento.Observacoes || 'Nenhuma'}</p>`;
                     bsModal.show();
@@ -295,7 +298,9 @@
                     .then(data => {
                         if (data.status === 'sucesso') {
                             const agendamentoNaTela = todosAgendamentos.find(a => a.ID_Agendamento === id);
-                            agendamentoNaTela.Status = (action === 'aprovar' ? 'Aprovado' : 'Recusado');
+                            const novoStatus = action === 'aprovar' ? 'Aprovado' : 'Recusado';
+                            agendamentoNaTela.Status = novoStatus;
+                            agendamentoNaTela.statusExibicao = novoStatus;
                             renderizarTabela();
                         } else { throw new Error(data.message); }
                     }).catch(error => {
@@ -307,6 +312,7 @@
             });
 
             function getStatusBadge(status) {
+                if (status === 'Concluído') return `<span class="badge bg-secondary">${status}</span>`;
                 if (status === 'Aprovado') return `<span class="badge bg-success">${status}</span>`;
                 if (status === 'Recusado') return `<span class="badge bg-danger">${status}</span>`;
                 return `<span class="badge bg-warning text-dark">${status}</span>`; 
@@ -314,7 +320,7 @@
 
             function getActionsButtons(agendamento) {
                 let buttons = `<button class="btn btn-sm btn-info me-1" data-action="detalhes" data-id="${agendamento.ID_Agendamento}">Detalhes</button>`;
-                if (agendamento.Status === 'Pendente') {
+                if (agendamento.statusExibicao === 'Pendente') {
                     buttons += `<button class="btn btn-sm btn-success me-1" data-action="aprovar" data-id="${agendamento.ID_Agendamento}">Aprovar</button>`;
                     buttons += `<button class="btn btn-sm btn-danger" data-action="recusar" data-id="${agendamento.ID_Agendamento}">Recusar</button>`;
                 }
